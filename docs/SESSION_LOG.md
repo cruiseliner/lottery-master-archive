@@ -50,3 +50,9 @@ megamillions: fetched 2550 NY rows from https://data.ny.gov/resource/5xaw-6ayf.j
 - Staleness message formatting fixed.
 
 **Next:** Phase 2 review using `docs/HANDOFF_PHASE2.md`. v0.2 is NOT started.
+
+**Publish (2026-10-23, EDT):**
+- 19:03: created the public repo `cruiseliner/lottery-master-archive` and pushed e846764.
+- ci run 40037478995: success.
+- 19:04: `workflow_dispatch` update run 40037509763: success. No data changes; keep-alive not needed; full check 24 pass / 2 warn / 0 fail.
+- Wrote and pushed `docs/HANDOFF_PHASE2.md`. Stopped before v0.2.

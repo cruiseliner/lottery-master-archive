@@ -18,6 +18,8 @@ _Last updated: 2026-10-23 (Phase 1 foundation complete; Phase 2 review not start
 - `ci.yml`: push and PR.
 - `release.yml`: v* tags; untested.
 
+**GitHub:** public repo https://github.com/cruiseliner/lottery-master-archive; Phase 1 commit e846764. On 2026-10-23 both the ci run (push) and the update run (workflow_dispatch) succeeded: no data changes, check 24 pass / 2 warn / 0 fail.
+
 **Payouts:** the fetch code works; results go to the local `cache/` only (not published; see D-003 and OI-01).
 
 **Relay:** drafted, not run.

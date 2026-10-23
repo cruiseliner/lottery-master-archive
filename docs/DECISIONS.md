@@ -1,0 +1,17 @@
+# Decisions
+
+Status labels: Fact = cited, Inference = reasoned. Approval refs are the owner's chat message ids.
+
+| ID | Date | Decision | Evidence / rationale |
+|---|---|---|---|
+| D-001 | 2026-10-23 | Repo is `cruiseliner/lottery-master-archive` (public) and the binary is `lottotool`; no "fl-"/"Florida Lottery" naming | Owner "proceed" (t219u). Fact: Florida Lottery terms say its name "may not be used without the prior written permission" |
+| D-002 | 2026-10-23 | Code is MIT. Data attribution: NY State Gaming Commission via data.ny.gov; license field null | Owner approval t219u; dataset metadata (`license` null) |
+| D-003 | 2026-10-23 | Only NY Open Data winning numbers are committed. Payout/winner tables are fetched into gitignored `cache/` only, and `schemas/payouts.csv` is header-only | Fact: powerball.com terms (MUSL) forbid reproduction "without express written consent by MUSL" and claim database rights. The megamillions.com terms page returned 404 (MISSING). MUSL and FL permission: pending |
+| D-004 | 2026-10-23 | Odds are computed exactly (u128 binomials) and tested against published values: the FL Powerball rules (7)(a)/(b) at 4 decimals, and the megamillions.com API PrizeMatrix `Odds` for matrices 3 and 4 plus the footer "1 in 23"/"1 in 24" | tests/odds.rs |
+| D-005 | 2026-10-23 | Eras are keyed on the **first draw date** under each matrix; pre-2015 PB and pre-2010 MM are `inferred` or `missing`; range checks on inferred eras are reported as WARN (circular) | eras.toml header; check `draws.ranges.inferred_eras` |
+| D-006 | 2026-10-23 | Nulls are never filled. Every contiguous null run of multiplier/double_play is in `missing.csv`, classified by `null_rules` in eras.toml. `check` recomputes runs and FAILs on any mismatch or UNDOCUMENTED run | src/ny.rs `missing_rows`, src/check.rs |
+| D-007 | 2026-10-23 | Schedule: daily `17 6 * * *` with `timezone: America/New_York`. Staleness: draw D is due 30h after 00:00 ET on D. The integrity gate runs before the commit and the staleness check after it, so stale data still gets committed but the run goes red | Fact: GitHub docs give UTC by default, an optional IANA `timezone`, a 5-min minimum, and top-of-hour delays. Fact: NY rowsUpdatedAt was about 03:33-03:38 ET the next morning |
+| D-008 | 2026-10-23 | Keep-alive: commit `docs/.keepalive` when the last commit is 45 days or older | Fact: "scheduled workflows are automatically disabled when no repository activity has occurred in 60 days". Inference: a bot commit counts as activity (not verified) |
+| D-009 | 2026-10-23 | Seeded ChaCha20 (`rand_chacha` 0.10), with rejection sampling for uniform ranges and partial Fisher-Yates for picks | Determinism tests (tests/rng.rs) |
+| D-010 | 2026-10-23 | HTTP: ureq 2 with gzip+brotli decoding, plus 3 attempts for powerball.com pages | Fact: on 2026-10-23 the same URL returned identity, gzip and br bodies across requests; with identity-only or gzip-only decoding, fetches intermittently failed with "no winners-table in page" (1 of 3 consecutive national fetches in testing) |
+| D-011 | 2026-10-23 | `scripts/relay/` targets the Anthropic Messages API (`POST /v1/messages`, `x-api-key`, `anthropic-version`). Model and version are required from `.env` with no defaults | docs.anthropic.com/en/api/messages, checked 2026-10-23 |

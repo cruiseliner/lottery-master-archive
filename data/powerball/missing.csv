@@ -1,0 +1,4 @@
+game,field,first_draw,last_draw,rows,status,reason,source
+powerball,multiplier,2012-01-18,2014-01-18,210,MISSING,NY dataset has no multiplier value for these draws; cause not documented by NY,NY Open Data d6yy-54nr
+powerball,double_play,2010-02-03,2021-08-21,1206,NOT_APPLICABLE_INFERRED,Before the first Double Play draw seen in Florida Lottery history (2021-08-23); national launch date not separately verified,Florida Lottery Powerball winning-numbers-history PDF
+powerball,double_play,2021-08-23,2026-06-01,748,MISSING,Double Play existed (Florida from 2021-08-23) but the NY dataset populates double_play_winning_numbers only from 2026-06-03,NY Open Data d6yy-54nr; Florida Lottery Powerball winning-numbers-history PDF

@@ -1,0 +1,25 @@
+[package]
+name = "lottotool"
+version = "0.1.0"
+edition = "2024"
+description = "Powerball / Mega Millions winning-number archive, validator and exact-odds tool"
+license = "MIT"
+repository = "https://github.com/cruiseliner/lottery-master-archive"
+
+[[bin]]
+name = "lottotool"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10.4"
+clap = { version = "4.6.7", features = ["derive"] }
+csv = "1.4.0"
+rand_chacha = "0.10.0"
+rand_core = "0.10.1"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "1.1.8"
+ureq = { version = "2", features = ["json", "gzip", "brotli"] }

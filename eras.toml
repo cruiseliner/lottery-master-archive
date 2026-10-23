@@ -1,0 +1,211 @@
+# eras.toml: game matrix eras, draw schedules and documented null rules for lottotool.
+#
+# Every era is keyed on its FIRST DRAW DATE under that matrix (not an announcement or
+# "matrix start" date). An era ends the day before the next era's first_draw.
+#
+# Status vocabulary (applies to *_status fields):
+#   sourced  = taken from a cited official/primary source (see `source`)
+#   inferred = derived from the NY Open Data draw history (max observed ball values /
+#              first and last observed dates); NOT confirmed by an official source
+#   missing  = not retrieved; do not use for anything that needs the real value
+#
+# Rule: no invented values. If a value is not sourced it is marked inferred or missing.
+
+schema_version = 1
+
+# ---------------------------------------------------------------------------
+[[game]]
+id = "powerball"
+name = "Powerball"
+ny_dataset = "d6yy-54nr"
+ny_dataset_url = "https://data.ny.gov/resource/d6yy-54nr.json"
+draw_time_et = "22:59"
+draw_time_source = "Florida Lottery Powerball rules PDF (about 10:59 p.m. ET); retrieved 2026-10-23"
+# Hours after 00:00 ET on the draw date by which the NY row is expected to exist.
+# Observed NY rowsUpdatedAt about 03:30-03:40 ET the morning after the draw (2026-10-22 03:38 EDT).
+stale_grace_hours = 30
+
+[[game.schedule]]
+from = "2010-02-03"
+days = ["Wed", "Sat"]
+status = "inferred"
+source = "NY Open Data d6yy-54nr: every row 2010-02-03..2021-08-21 falls on Wed/Sat with no gaps"
+
+[[game.schedule]]
+from = "2021-08-23"
+days = ["Mon", "Wed", "Sat"]
+status = "sourced"
+source = "Florida Lottery Powerball winning-numbers-history PDF: first Monday draw 8/23/21; NY data agrees"
+
+[[game.era]]
+id = "pb-2010"
+first_draw = "2010-02-03"
+first_draw_status = "missing"   # 2010-02-03 is only the first row in the NY dataset; real era start not retrieved
+white_count = 5
+white_max = 59
+bonus_max = 39
+matrix_status = "inferred"      # max observed values in NY data 2010-02-03..2012-01-14
+price_status = "missing"
+multiplier = "Power Play (details for this era: missing)"
+source = "NY Open Data d6yy-54nr (observed maxima). Last draw with Powerball > 35: 2011-12-07."
+notes = "Pre-2015 eras are inferred only. Official start date and price: MISSING."
+
+[[game.era]]
+id = "pb-2012"
+first_draw = "2012-01-18"
+first_draw_status = "inferred"  # first NY row on/after 2012-01-15; true first draw lies in 2011-12-10..2012-01-18
+white_count = 5
+white_max = 59
+bonus_max = 35
+matrix_status = "inferred"      # max observed values 2012-01-18..2015-10-03; NY Lottery release text says 'currently 59 / 35'
+price_status = "missing"
+multiplier = "Power Play (details for this era: missing)"
+source = "NY Open Data d6yy-54nr (observed maxima); NY Lottery 2015 matrix-change release ('currently 59 / 35')"
+notes = "Transition window 2011-12-10..2012-01-14 is ambiguous (no row in it exceeds 35). Official first draw: MISSING."
+
+[[game.era]]
+id = "pb-2015"
+first_draw = "2015-10-07"
+first_draw_status = "sourced"
+white_count = 5
+white_max = 69
+bonus_max = 26
+matrix_status = "sourced"
+price_usd = 2
+price_status = "sourced"
+multiplier = "Power Play +$1 (10X only when the advertised jackpot is $150M or less); Double Play +$1 where offered"
+source = "NY Lottery release and Vermont Powerball rules ('Effective October 7, 2015'); Florida Lottery Powerball rules PDF (prices, Power Play, published odds); retrieved 2026-10-23"
+notes = "Current era. Published odds reproduced exactly by `cargo test` (tests/odds.rs)."
+
+# Documented nulls. `lottotool update` turns every run of blank values into a row of
+# data/<game>/missing.csv, using the first matching rule here for status/reason.
+[[game.null_rule]]
+field = "multiplier"
+from = "2012-01-18"
+to = "2014-01-18"
+status = "MISSING"
+reason = "NY dataset has no multiplier value for these draws; cause not documented by NY"
+source = "NY Open Data d6yy-54nr"
+
+[[game.null_rule]]
+field = "double_play"
+from = "2010-02-03"
+to = "2021-08-22"
+status = "NOT_APPLICABLE_INFERRED"
+reason = "Before the first Double Play draw seen in Florida Lottery history (2021-08-23); national launch date not separately verified"
+source = "Florida Lottery Powerball winning-numbers-history PDF"
+
+[[game.null_rule]]
+field = "double_play"
+from = "2021-08-23"
+to = "2026-06-02"
+status = "MISSING"
+reason = "Double Play existed (Florida from 2021-08-23) but the NY dataset populates double_play_winning_numbers only from 2026-06-03"
+source = "NY Open Data d6yy-54nr; Florida Lottery Powerball winning-numbers-history PDF"
+
+# ---------------------------------------------------------------------------
+[[game]]
+id = "megamillions"
+name = "Mega Millions"
+ny_dataset = "5xaw-6ayf"
+ny_dataset_url = "https://data.ny.gov/resource/5xaw-6ayf.json"
+draw_time_et = "23:00"
+draw_time_source = "megamillions.com PrizeMatrix FooterText ('held Tuesday and Friday at 11:00 pm ET'); retrieved 2026-10-23"
+stale_grace_hours = 30
+
+[[game.schedule]]
+from = "2002-05-17"
+days = ["Tue", "Fri"]
+status = "inferred"
+source = "NY Open Data 5xaw-6ayf: every row falls on Tue/Fri with no gaps; megamillions.com footer confirms Tue/Fri for current matrices"
+
+[[game.era]]
+id = "mm-2002"
+first_draw = "2002-05-17"
+first_draw_status = "missing"   # first row of the NY dataset only
+white_count = 5
+white_max = 52
+bonus_max = 52
+matrix_status = "inferred"      # max observed values 2002-05-17..2005-06-21
+price_status = "missing"
+multiplier = "none recorded"
+source = "NY Open Data 5xaw-6ayf (observed maxima)"
+notes = "Pre-2010 eras are inferred only. Official dates and price: MISSING."
+
+[[game.era]]
+id = "mm-2005"
+first_draw = "2005-06-24"
+first_draw_status = "inferred"  # first NY row with a value above 52 (56 white); previous row 2005-06-21 is within 52/52
+white_count = 5
+white_max = 56
+bonus_max = 46
+matrix_status = "sourced"       # megamillions.com MatrixID 1 (MatrixStart 2010-01-01) = 56/46 $1; start before 2010 is inferred
+price_usd = 1
+price_status = "sourced"        # sourced for 2010-01-01 onward (MatrixID 1); before 2010: missing
+multiplier = "Megaplier (NY multiplier column 'started 1/18/2011')"
+source = "megamillions.com GetDrawDataByTickWithMatrix PrizeMatrix MatrixID 1; NY Open Data 5xaw-6ayf"
+notes = "Matrix 56/46 and $1 are sourced only from 2010-01-01 (API MatrixStart); the 2005-06-24 first draw is inferred from NY data."
+
+[[game.era]]
+id = "mm-2013"
+first_draw = "2013-10-22"
+first_draw_status = "sourced"   # MatrixID 2 MatrixStart 2013-10-20; 2013-10-18 tick returns MatrixID 1, 2013-10-22 tick returns MatrixID 2
+white_count = 5
+white_max = 75
+bonus_max = 15
+matrix_status = "sourced"
+price_usd = 1
+price_status = "sourced"
+multiplier = "Megaplier"
+source = "megamillions.com GetDrawDataByTickWithMatrix PrizeMatrix MatrixID 2 (2013-10-18 and 2013-10-22 ticks); retrieved 2026-10-23"
+
+[[game.era]]
+id = "mm-2017"
+first_draw = "2017-10-31"
+first_draw_status = "sourced"   # MatrixID 3 MatrixStart 2017-10-29; 2017-10-27 tick returns MatrixID 2, 2017-10-31 returns MatrixID 3
+white_count = 5
+white_max = 70
+bonus_max = 25
+matrix_status = "sourced"
+price_usd = 2
+price_status = "sourced"
+multiplier = "Megaplier"
+source = "megamillions.com GetDrawDataByTickWithMatrix PrizeMatrix MatrixID 3 (2017-10-27 and 2017-10-31 ticks); retrieved 2026-10-23"
+
+[[game.era]]
+id = "mm-2025"
+first_draw = "2025-04-08"
+first_draw_status = "sourced"   # megamillions.com news: last old-matrix draw Fri 2025-04-04, first new draw Tue 2025-04-08
+white_count = 5
+white_max = 70
+bonus_max = 24
+matrix_status = "sourced"
+price_usd = 5
+price_status = "sourced"
+multiplier = "built-in multiplier on every play (Megaplier retired); per-draw multiplier value not in NY data: MISSING"
+source = "megamillions.com GetLatestDrawData PrizeMatrix MatrixID 4; https://www.megamillions.com/News/2025/New-Mega-Millions%C2%AE-arrives-in-April.aspx; retrieved 2026-10-23"
+notes = "Current era. Published odds (API PrizeMatrix Odds) reproduced exactly by `cargo test`."
+
+[[game.null_rule]]
+field = "multiplier"
+from = "2002-05-17"
+to = "2011-01-17"
+status = "NOT_APPLICABLE"
+reason = "NY column description: 'Multiplier (started 1/18/2011)'"
+source = "NY Open Data 5xaw-6ayf column metadata"
+
+[[game.null_rule]]
+field = "multiplier"
+from = "2025-04-08"
+to = "9999-12-31"
+status = "MISSING"
+reason = "Built-in multiplier era: NY dataset has no multiplier value since 2025-04-08"
+source = "NY Open Data 5xaw-6ayf; megamillions.com 2025 matrix-change news"
+
+[[game.null_rule]]
+field = "double_play"
+from = "2002-05-17"
+to = "9999-12-31"
+status = "NOT_APPLICABLE"
+reason = "Mega Millions has no Double Play; dp_* columns are always empty for this game"
+source = "schema convention (shared draws.csv schema)"

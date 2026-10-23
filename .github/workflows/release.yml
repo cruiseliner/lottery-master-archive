@@ -1,0 +1,41 @@
+# Tag-triggered release: push a tag like v0.1.0 to build lottotool and publish it with
+# SHA256SUMS. Nothing is released unless a maintainer pushes a v* tag.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Test
+        run: cargo test --locked
+      - name: Build
+        run: cargo build --release --locked
+      - name: Package
+        run: |
+          set -euo pipefail
+          name="lottotool-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu"
+          mkdir -p dist/"$name"
+          cp target/release/lottotool README.md LICENSE eras.toml dist/"$name"/
+          tar -C dist -czf dist/"$name".tar.gz "$name"
+          cd dist
+          sha256sum "$name".tar.gz > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
+            --title "lottotool $GITHUB_REF_NAME" --generate-notes

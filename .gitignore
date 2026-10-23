@@ -1,0 +1,25 @@
+# Build output
+/target
+
+# Secrets: never commit
+.env
+.env.*
+!.env.example
+scripts/relay/.env
+scripts/relay/logs/
+
+# Fetched third-party payout tables (MUSL / Florida Lottery permission pending): local only
+/cache/
+
+# Owner's personal ticket ledger and any private data: never in the public repo
+/ledger/
+/private/
+*.ledger.csv
+*ledger*.csv
+tickets*.csv
+
+# Editor / OS noise
+.DS_Store
+*.swp
+__pycache__/
+*.pyc

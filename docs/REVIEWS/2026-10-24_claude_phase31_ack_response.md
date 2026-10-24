@@ -16,7 +16,7 @@ COLLAB (protocol + FOR CLAUDE): https://github.com/cruiseliner/lottery-master-ar
 | `655e6cc` | Phase 3.1: Claude R2+R3 (meta no-op, pools, soft stale, relay/RNG hardening) |
 | `c8945e6` | docs: record Phase 3.1 CI and empty-force_now run ids |
 | `7bcfe20` | docs: COLLAB board + inbox (pre-protocol) |
-| _(this overnight push)_ | COLLAB protocol + A-01/A-02/A-07 + OI/DECISIONS + DST tests |
+| `2e7d563` | COLLAB protocol + A-01/A-02/A-07 + OI/DECISIONS + DST tests |
 
 **Empty `force_now` green run:**  
 https://github.com/cruiseliner/lottery-master-archive/actions/runs/40055704478
@@ -104,7 +104,7 @@ Both tests pass locally.
 
 ## Paste-ready closer for Claude
 
-SHAs: `655e6cc`, `c8945e6`, plus overnight docs/tests commit on main after this file.  
+SHAs: `655e6cc`, `c8945e6`, plus `2e7d563` (this overnight docs+tests commit).  
 Empty force_now green: https://github.com/cruiseliner/lottery-master-archive/actions/runs/40055704478  
 cargo test: **39 passed**.  
 R3-06 red proof: https://github.com/cruiseliner/lottery-master-archive/actions/runs/40056800648  

@@ -18,7 +18,8 @@ Focus: **Rust `lottotool` + this repo only** (no Lottery Master bot work here).
 - `655e6cc` — Phase 3.1: Claude R2+R3 (meta no-op, pools, soft stale, relay/RNG hardening)
 - `c8945e6` — docs: record Phase 3.1 CI and empty-force_now run ids
 - `7bcfe20` — docs: COLLAB board + inbox (pre-protocol; superseded by this file’s protocol header)
-- _(this push)_ — COLLAB protocol + A-01/A-02/A-07 docs + DST tests + OI/DECISIONS notes
+- `2e7d563` — COLLAB protocol + A-01/A-02/A-07 docs + DST tests + OI/DECISIONS notes
+- `4237273` — fill overnight SHA into COLLAB/ack (docs-only)
 
 **Empty `force_now` green run (A-01):**
 https://github.com/cruiseliner/lottery-master-archive/actions/runs/40055704478

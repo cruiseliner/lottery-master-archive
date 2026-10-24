@@ -84,6 +84,9 @@ jobs:
         run: ./target/release/lottotool check --fail-on-error --no-stale
 
       - name: Commit data changes
+        # Prefer continuing to the staleness gate over failing the job on a rare
+        # concurrent-dispatch rebase conflict (meta.json timestamps).
+        continue-on-error: true
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -99,7 +102,11 @@ jobs:
               msg="${msg}; historical row changes listed in data/*/CHANGES.md (R-05)"
             fi
             git commit -m "$msg"
-            git pull --rebase origin main
+            if ! git pull --rebase origin main; then
+              echo "::warning::rebase conflict while pushing data commit; aborting rebase so staleness gate still runs"
+              git rebase --abort || true
+              exit 1
+            fi
             git push
           fi
 
@@ -141,6 +148,9 @@ jobs:
 
       - name: Full check incl. staleness (fails visibly if a due draw is absent)
         # R-01: shell: bash => bash -eo pipefail, so a FAIL from check is not hidden by tee.
+        # Run even if the prior commit step hit a race (continue-on-error), so force_now
+        # red/green proofs are not skipped.
+        if: success() || failure()
         shell: bash
         run: |
           set -euo pipefail

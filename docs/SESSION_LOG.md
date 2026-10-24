@@ -69,3 +69,14 @@ megamillions: fetched 2550 NY rows from https://data.ny.gov/resource/5xaw-6ayf.j
 - Paste paths: `docs/REVIEWS/2026-10-23_claude_phase2_response.md`, `/workspace/lottery-master/claude_response_paste.md`, `/workspace/lottery-master/claude_paste_round2.md`.
 
 **Next:** push; CI green; R-01 red/green `force_now` dispatch; first scheduled run watch (OI-16). v0.2 NOT started.
+
+## 2026-10-23 evening (America/New_York) — Phase 3 push + R-01 proof
+
+- Commit `6a02b08` Phase 3 R-01..R-16; CI green `40053323860`.
+- R-01 green force_now=`2026-10-23T20:00:00Z` run `40053358157` SUCCESS (staleness PASS both games).
+- Concurrent red dispatch raced on `data/meta.json` rebase; follow-up workflow tweak: Commit `continue-on-error`, Full check `if: success() || failure()`.
+- Local red `--now 2026-10-24T12:00:00Z`: MM STALE FAIL exit 1; green exit 0.
+- R-16 history scan CLEAN (no payout/winner tables in git history).
+- Claude paste: `docs/REVIEWS/2026-10-23_claude_phase2_response.md`, `/workspace/lottery-master/claude_response_paste.md`, `/workspace/lottery-master/claude_paste_round2.md`.
+- No v0.2.
+

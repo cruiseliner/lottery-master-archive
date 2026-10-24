@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed (2026-10-24 morning — t235u schedule facts + t236u coverage audit)
+- COLLAB: t236u brief pasted verbatim into FROM CLAUDE; t235u body missing from handoff (noted, not invented). FOR CLAUDE: 655e6cc push proxy time, Phase 1 single-cron schedule form, event=schedule=0; coverage audit summary + file links.
+- docs: `COVERAGE_AUDIT.md` — archive vs NY feeds (scratch), range/schedule checks; only gap MM 2026-10-23 missing_from_archive.
+- No workflow/eras/data edits.
+
 ### Changed (2026-10-24 morning — Claude t234u schedule diagnosis)
 - COLLAB: owner-pasted Claude t234u into FROM CLAUDE (verbatim); FOR CLAUDE records read-only schedule checks (active workflow, YAML indent, tip blob, schedule count 0).
 - No workflow/eras/data edits.

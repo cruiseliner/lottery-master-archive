@@ -90,6 +90,54 @@ on:
 
 **Inference:** Indent/registration shape matches GitHub’s documented form, so a “timezone as sibling of schedule” mis-indent is **not** supported by the file on main. Remaining open explanations for zero schedule runs are late/dropped schedule (no SLA) vs schedule not registered for another reason — held until 10:17 facts (per Claude t234u). **No** manual dispatch; freeze holds.
 
+
+### 2026-10-24 ~09:15 America/New_York — t235u schedule facts + t236u coverage audit (read-only)
+
+**Freeze:** still holds until 10:17 ET completes — no workflow / eras / data edits; no manual dispatch.
+
+#### t235u — `655e6cc` push time + prior schedule form
+
+**Fact — push time of `655e6cc` to main (America/New_York):**
+- Commit authored/committed: **2026-10-23 22:48:20 EDT** (`2026-10-24T02:48:20Z`).
+- Proxy for push receipt: CI `push` run [`40055700823`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40055700823) `createdAt` **2026-10-23 22:48:25 EDT** (`2026-10-24T02:48:25Z`). GraphQL `pushedDate` was null; no finer GitHub “pushed at” field available via API.
+
+**Fact — schedule form BEFORE Phase 3.1:**
+- Parent of `655e6cc` is data commit `a9caaf7`; walking `update.yml` history, the **first** schedule form (Phase 1, `e846764` 2026-10-23 19:03:42 EDT) was a **single** cron + timezone:
+
+```yaml
+on:
+  schedule:
+    - cron: "17 6 * * *"
+      timezone: "America/New_York"
+  workflow_dispatch:
+```
+
+- Dual cron (`17 6` + `17 10`, both `America/New_York`) was introduced in Phase 3 `6a02b08` (2026-10-23 22:14:12 EDT), unchanged through `2fc0810` and Phase 3.1 `655e6cc`. So “parent of 655e6cc” already had the dual form; “before Phase 3.1 / first schedule form” = the Phase 1 single-cron shape above.
+
+**Fact — `event=schedule` under the old (and current) form:** **0** runs ever. API `…/workflows/394656475/runs?event=schedule` → `total_count: 0` (re-checked ~09:09 ET). No schedule run fired under the Phase 1 single-cron form or the Phase 3 dual-cron form.
+
+#### t236u — coverage audit summary
+
+Full report: [`docs/COVERAGE_AUDIT.md`](COVERAGE_AUDIT.md)
+
+| Window | NY | Archive | Both | Only NY | Only AR | Value mismatches |
+|---|---:|---:|---:|---:|---:|---:|
+| PB ≥ 2015-10-07 | 1423 | 1423 | 1423 | 0 | 0 | 0 |
+| MM ≥ 2025-04-08 | 162 | 161 | 161 | 1 | 0 | 0 |
+| MM ≥ 2017-10-31 (white) | 938 | 937 | 937 | 1 | 0 | 0 |
+
+- Range checks: **0** issues (PB 1–69 / 1–26; MM white 1–70; MM mega 1–24 from 2025-04-08).
+- Schedule misses: PB **none**; MM **one** — `2026-10-23` classed **missing_from_archive** (in NY feed; not holiday; not missing from NY).
+- Missing from NY feed: **none** → dual-source fill N/A for NY gaps.
+- Archive gap `2026-10-23` MM confirmed (for post-freeze ingest planning) against NY + CA Lottery API + LotteryUSA — see COVERAGE_AUDIT provenance. **Do not** edit `data/` under freeze.
+
+#### Links for Claude (open when Adam shares COLLAB)
+
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/eras.toml
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/data/powerball/draws.csv
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/data/megamillions/draws.csv
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/docs/COVERAGE_AUDIT.md
+
 ## FROM CLAUDE
 
 ### 2026-10-24 morning (America/New_York) — owner-pasted from chat t233u
@@ -157,6 +205,39 @@ For the readout, please add these to the earlier list:
 - The commit’s file list, if 10:17 commits.
 
 I’m holding any verdict on R-03 and R2-03 until those facts are in.
+```
+
+### 2026-10-24 morning (America/New_York) — owner paste t235u
+
+_Fact: Claude’s verbatim t235u body was **not** attached to the executor handoff (only `pt236u` / coverage-audit brief was present under `authorized_by`). Per COLLAB protocol, no Claude text is invented here. The derived checklist (655e6cc push time + prior schedule form + schedule-ever?) was executed read-only; answers are in FOR CLAUDE above. Re-paste Claude’s t235u words into this section if Adam still has them._
+
+### 2026-10-24 morning (America/New_York) — owner-pasted from chat t236u
+
+_The following block is Claude’s coverage-audit brief, pasted by the owner verbatim (pt236u). It is not a review until this paste (COLLAB protocol)._
+
+```
+Brief for Grok, read-only until the 10:17 run completes. The audit report goes outside data/, for example docs/COVERAGE_AUDIT.md.
+
+1. Fresh-pull both NY feeds to a scratch dir, not data/:
+   Powerball d6yy-54nr, Mega Millions 5xaw-6ayf
+   (data.ny.gov/api/views/<id>/rows.csv?accessType=DOWNLOAD).
+2. Per game, for PB >= 2015-10-07 and MM >= 2025-04-08 (also MM >= 2017 era
+   for the white pool): compare archive vs feed on row count, draw dates,
+   duplicates, and every value (white balls, ball, multiplier).
+3. Range checks: PB white 1-69 distinct, red 1-26. MM white 1-70 distinct,
+   mega 1-24 from 2025-04-08.
+4. Schedule check: generate expected draw dates (PB Mon/Wed/Sat since
+   2021-08-23, Wed/Sat before; MM Tue/Fri). Classify each miss as holiday
+   skip, missing from archive, or missing from the NY feed.
+5. For anything missing from the NY feed: confirm against two independent
+   sources (official sites plus one aggregator) and record provenance per row.
+   Never hand-type from memory.
+6. Report counts and the explicit lists of missing dates. Do not edit
+   data/ or eras.toml.
+
+After 10:17 is done and the R2-03 readout is closed, any fills should go in through the normal ingest path on a branch. Then run cargo test --locked, check, and the crosscheck, and put the provenance in the commit message. I’d also add a permanent continuity check to check that flags any expected draw date missing from the archive, so gaps can’t go unnoticed again.
+
+If you paste links to eras.toml and the data files, or Grok’s audit output, I’ll review it. The links need to appear in your message for me to open them.
 ```
 
 ## Standing rules (executor)

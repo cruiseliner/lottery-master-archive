@@ -1,5 +1,25 @@
 # Session log
 
+## 2026-10-24 morning (America/New_York) — t235u schedule facts + t236u coverage audit
+
+**Owner pastes.** t236u (pt236u coverage-audit brief) pasted **verbatim** into `docs/COLLAB.md` FROM CLAUDE. Claude’s **t235u** verbatim body was **not** in the executor handoff (`authorized_by` only `pt236u`); FROM CLAUDE notes that Fact — no invented Claude text. Derived t235u checklist executed read-only.
+
+**t235u Facts (freeze held):**
+- `655e6cc` commit time: **2026-10-23 22:48:20 EDT**; CI push-triggered run `40055700823` createdAt **2026-10-23 22:48:25 EDT** (push proxy).
+- First schedule form (Phase 1 `e846764`): single `cron: "17 6 * * *"` + `timezone: "America/New_York"`. Dual cron from Phase 3 `6a02b08`.
+- `event=schedule` **total_count=0** ever (under old and current form).
+
+**t236u coverage audit (read-only, scratch feeds, docs-only write):**
+- Report: `docs/COVERAGE_AUDIT.md`
+- PB ≥ 2015-10-07: 1423/1423 match, 0 value mismatches, 0 schedule misses, 0 range issues.
+- MM ≥ 2025-04-08: 162 NY / 161 archive; only gap `2026-10-23` **missing_from_archive** (in NY).
+- MM ≥ 2017-10-31: 938/937; same single gap.
+- Missing from NY feed: **none**. Holiday skips (absent both): **none**.
+- `2026-10-23` MM confirmed NY + CA Lottery API + LotteryUSA (provenance in audit). No `data/` / `eras.toml` edits.
+
+**Links placed in COLLAB FOR CLAUDE:** eras.toml, both draws.csv, COVERAGE_AUDIT.md.
+
+
 ## 2026-10-24 morning (America/New_York) — Claude t234u schedule diagnosis + read-only checks
 
 **Owner paste.** Claude’s t234u schedule diagnosis pasted **verbatim** into `docs/COLLAB.md` FROM CLAUDE (2026-10-24 morning ET).

@@ -16,6 +16,7 @@ _Last updated: 2026-10-24 ~09:00 America/New_York (Claude t234u paste + schedule
 **Automation:** unchanged overnight (freeze D-024). `update.yml` still dual cron America/New_York; empty force_now green run 40055704478.
 
 **Collab:** [`docs/COLLAB.md`](COLLAB.md) — protocol + FOR CLAUDE. Ack paste: `docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md`.
+**Coverage audit (2026-10-24):** [`docs/COVERAGE_AUDIT.md`](COVERAGE_AUDIT.md) — archive vs NY scratch feeds; only gap MM `2026-10-23` missing_from_archive.
 
 **GitHub:** https://github.com/cruiseliner/lottery-master-archive
 

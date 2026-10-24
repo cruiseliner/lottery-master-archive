@@ -1,22 +1,22 @@
 {
-  "schema_version": 1,
-  "updated_at": "2026-10-24T02:07:50Z",
   "games": {
-    "powerball": {
-      "rows": 2015,
-      "first_draw": "2010-02-03",
-      "last_draw": "2026-10-21",
-      "ny_dataset": "d6yy-54nr",
-      "ny_dataset_url": "https://data.ny.gov/resource/d6yy-54nr.json",
-      "current_era": "pb-2015"
-    },
     "megamillions": {
-      "rows": 2550,
+      "current_era": "mm-2025",
       "first_draw": "2002-05-17",
       "last_draw": "2026-10-20",
       "ny_dataset": "5xaw-6ayf",
       "ny_dataset_url": "https://data.ny.gov/resource/5xaw-6ayf.json",
-      "current_era": "mm-2025"
+      "rows": 2550
+    },
+    "powerball": {
+      "current_era": "pb-2015",
+      "first_draw": "2010-02-03",
+      "last_draw": "2026-10-21",
+      "ny_dataset": "d6yy-54nr",
+      "ny_dataset_url": "https://data.ny.gov/resource/d6yy-54nr.json",
+      "rows": 2015
     }
-  }
+  },
+  "schema_version": 1,
+  "updated_at": "2026-10-24T02:15:10Z"
 }

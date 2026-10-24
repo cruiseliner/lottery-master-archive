@@ -56,3 +56,16 @@ megamillions: fetched 2550 NY rows from https://data.ny.gov/resource/5xaw-6ayf.j
 - ci run 40037478995: success.
 - 19:04: `workflow_dispatch` update run 40037509763: success. No data changes; keep-alive not needed; full check 24 pass / 2 warn / 0 fail.
 - Wrote and pushed `docs/HANDOFF_PHASE2.md`. Stopped before v0.2.
+
+## Phase 3 — Claude Phase 2 integration (2026-10-23, America/New_York)
+
+**Owner:** t224u / pt224u (+ t225u clarifications). **No v0.2.**
+
+**Done:**
+- R-01..R-14, R-16 FIXED; R-15 DEFERRED (exact ask unrecovered).
+- R-16 scan: CLEAN (no payout tables in history).
+- Live `--crosscheck 3`: PASS 3/3 PB and MM.
+- Docs: REVIEWS triage + paste-ready Claude response; CHANGELOG/DECISIONS/OPEN_ISSUES/CURRENT_STATE updated.
+- Paste paths: `docs/REVIEWS/2026-10-23_claude_phase2_response.md`, `/workspace/lottery-master/claude_response_paste.md`, `/workspace/lottery-master/claude_paste_round2.md`.
+
+**Next:** push; CI green; R-01 red/green `force_now` dispatch; first scheduled run watch (OI-16). v0.2 NOT started.

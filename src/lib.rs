@@ -4,6 +4,7 @@
 //! Per-tier winner/payout tables are fetched into the gitignored `cache/` only.
 
 pub mod check;
+pub mod crosscheck;
 pub mod data;
 pub mod eras;
 pub mod export;

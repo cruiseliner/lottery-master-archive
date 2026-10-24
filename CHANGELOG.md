@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed (Phase 3 — Claude Phase 2 review integration, 2026-10-23)
+- Workflows: `shell: bash` / pipefail, dual cron 06:17+10:17 America/New_York, `force_now`, non-bot keepalive, pinned action SHAs, multi-OS `release.yml`.
+- Staleness due = 06:00 ET next calendar day; historical schedule gaps WARN (`MISSING_DRAW`) + `schedule_exception`; inferred_eras SKIP; whites must be ascending (FAIL).
+- `check --crosscheck N` (local official-source winning numbers); `data/meta.json`; `data/<game>/CHANGES.md` on historical edits; era `white_group`/`bonus_group`.
+- README: dropped "Past results do not change future odds"; kept non-affiliation + confirm-with-official.
+- `rust-toolchain.toml` (stable + clippy + rustfmt).
+
 ## [0.1.0] - 2026-10-23 (Phase 1 foundation; no tag or release yet)
 ### Added
 - `lottotool` CLI with these commands: `update <game>` (NY Open Data), `update --payouts` (local cache only), `check`,

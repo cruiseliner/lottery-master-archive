@@ -83,6 +83,7 @@ fn clean_fixture_passes() {
         &Options {
             no_stale: false,
             now: Some(now),
+            crosscheck: None,
         },
     );
     assert!(!check::any_fail(&res), "{res:#?}");
@@ -104,10 +105,11 @@ fn out_of_range_and_gap_fail() {
         &Options {
             no_stale: true,
             now: None,
+            crosscheck: None,
         },
     );
     assert_eq!(status(&res, "draws.ranges"), Status::Fail);
-    assert_eq!(status(&res, "draws.schedule_gaps"), Status::Fail);
+    assert_eq!(status(&res, "draws.schedule_gaps"), Status::Warn); // R-04 historical gaps
     assert_eq!(status(&res, "staleness"), Status::Skip);
     let skip = res.iter().find(|c| c.check == "staleness").unwrap();
     assert!(!skip.detail.is_empty(), "SKIP must carry a reason");
@@ -126,6 +128,7 @@ fn duplicate_whites_fail() {
         &Options {
             no_stale: true,
             now: None,
+            crosscheck: None,
         },
     );
     assert_eq!(status(&res, "draws.ranges"), Status::Fail);
@@ -149,6 +152,7 @@ fn staleness_fails_when_a_due_draw_is_absent() {
         &Options {
             no_stale: false,
             now: Some(after),
+            crosscheck: None,
         },
     );
     assert_eq!(status(&res, "staleness"), Status::Fail);
@@ -170,6 +174,7 @@ fn undocumented_or_stale_missing_csv_fails() {
         &Options {
             no_stale: true,
             now: None,
+            crosscheck: None,
         },
     );
     assert_eq!(status(&res, "missing.coverage"), Status::Fail);
@@ -224,6 +229,68 @@ fn ny_normalise_strips_padding() {
     assert_eq!(v[1].multiplier, Some(4));
     assert_eq!(v[0].multiplier, None);
     assert_eq!(v[1].whites(), [1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn non_ascending_whites_fail() {
+    let root = tmp("asc");
+    let mut v = mm_ok();
+    // swap w2/w3 so whites are not ascending
+    v[0].w2 = 4;
+    v[0].w3 = 3;
+    write(&root, Game::Megamillions, &v);
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(status(&res, "draws.whites_ascending"), Status::Fail);
+}
+
+#[test]
+fn schedule_exception_removes_gap() {
+    let mut e = eras();
+    let g = e.game.iter_mut().find(|g| g.id == "megamillions").unwrap();
+    // Cancel Tue 2026-10-13 so a fixture that skips it is clean for gaps.
+    g.schedule_exception
+        .push(lottotool::eras::ScheduleException {
+            date: d("2026-10-13"),
+            reason: "test cancellation".into(),
+            source: "test".into(),
+        });
+    let root = tmp("exc");
+    let v = vec![
+        draw("2026-10-16", [10, 20, 30, 40, 70], 24, None, "mm-2025"),
+        draw("2026-10-20", [7, 8, 9, 10, 11], 1, None, "mm-2025"),
+    ];
+    // write missing using modified eras
+    data::write_csv(&Game::Megamillions.draws_path(&root), &v, DRAWS_HEADER).unwrap();
+    data::write_csv(
+        &Game::Megamillions.missing_path(&root),
+        &ny::missing_rows(Game::Megamillions, g, &v),
+        MISSING_HEADER,
+    )
+    .unwrap();
+    let res = check::run(
+        &root,
+        &e,
+        &[Game::Megamillions],
+        &Options {
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(
+        status(&res, "draws.schedule_gaps"),
+        Status::Pass,
+        "{res:#?}"
+    );
 }
 
 #[test]

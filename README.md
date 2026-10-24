@@ -5,8 +5,8 @@ A public, validated archive of **Powerball** and **Mega Millions** winning numbe
 computes exact odds per prize tier.
 
 > Not affiliated with, endorsed by, or sponsored by MUSL, the Mega Millions consortium, the
-> New York State Gaming Commission, the Florida Lottery or any lottery. Past results do not
-> change future odds. Always confirm numbers with the official lottery.
+> New York State Gaming Commission, the Florida Lottery or any lottery.
+> Always confirm numbers with the official lottery.
 
 ## What is in the repo
 

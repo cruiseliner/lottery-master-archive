@@ -20,6 +20,9 @@ pub struct GameDef {
     pub draw_time_source: String,
     pub stale_grace_hours: i64,
     pub schedule: Vec<Schedule>,
+    /// Scheduled weekdays that produced no draw (cancelled / moved). Excluded from expected dates.
+    #[serde(default)]
+    pub schedule_exception: Vec<ScheduleException>,
     pub era: Vec<Era>,
     #[serde(default)]
     pub null_rule: Vec<NullRule>,
@@ -30,6 +33,14 @@ pub struct Schedule {
     pub from: NaiveDate,
     pub days: Vec<String>,
     pub status: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScheduleException {
+    pub date: NaiveDate,
+    pub reason: String,
+    #[serde(default)]
     pub source: String,
 }
 
@@ -47,9 +58,22 @@ pub struct Era {
     pub price_status: String,
     #[serde(default)]
     pub multiplier: Option<String>,
+    /// Independent pool key for white balls (R-08). Default "white".
+    #[serde(default = "default_white_group")]
+    pub white_group: String,
+    /// Independent pool key for the bonus ball (R-08). Default "bonus".
+    #[serde(default = "default_bonus_group")]
+    pub bonus_group: String,
     pub source: String,
     #[serde(default)]
     pub notes: Option<String>,
+}
+
+fn default_white_group() -> String {
+    "white".into()
+}
+fn default_bonus_group() -> String {
+    "bonus".into()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -151,11 +175,18 @@ impl GameDef {
             None => false,
         }
     }
-    /// All scheduled draw dates in [from, to].
+    pub fn is_schedule_exception(&self, date: NaiveDate) -> bool {
+        self.schedule_exception.iter().any(|e| e.date == date)
+    }
+    /// Draw weekday that is not listed under `[[game.schedule_exception]]`.
+    pub fn expected_draw_day(&self, date: NaiveDate) -> bool {
+        self.is_draw_day(date) && !self.is_schedule_exception(date)
+    }
+    /// All expected draw dates in [from, to] (schedule exceptions excluded).
     pub fn scheduled_dates(&self, from: NaiveDate, to: NaiveDate) -> Vec<NaiveDate> {
         from.iter_days()
             .take_while(|d| *d <= to)
-            .filter(|d| self.is_draw_day(*d))
+            .filter(|d| self.expected_draw_day(*d))
             .collect()
     }
     pub fn null_rule_for(&self, field: &str, date: NaiveDate) -> Option<&NullRule> {

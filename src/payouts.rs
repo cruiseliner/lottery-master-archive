@@ -63,6 +63,11 @@ fn http_get(url: &str) -> Result<String> {
 }
 
 /// GET with up to 3 attempts; `ok` decides whether a body is usable.
+pub fn http_get_retry_public(url: &str, ok: impl Fn(&str) -> bool) -> Result<String> {
+    http_get_retry(url, ok)
+}
+
+/// GET with up to 3 attempts; `ok` decides whether a body is usable.
 fn http_get_retry(url: &str, ok: impl Fn(&str) -> bool) -> Result<String> {
     let mut last = anyhow::anyhow!("no attempt made");
     for attempt in 1..=3 {

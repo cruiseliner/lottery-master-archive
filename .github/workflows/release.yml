@@ -1,5 +1,4 @@
-# Tag-triggered release: push a tag like v0.1.0 to build lottotool and publish it with
-# SHA256SUMS. Nothing is released unless a maintainer pushes a v* tag.
+# Tag-triggered multi-OS release (R-14). Push a v* tag to build and publish.
 name: release
 
 on:
@@ -10,11 +9,24 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: lottotool
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: lottotool.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin: lottotool
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Rust toolchain (stable)
         run: |
           rustup toolchain install stable --profile minimal
@@ -24,18 +36,52 @@ jobs:
       - name: Build
         run: cargo build --release --locked
       - name: Package
+        shell: bash
         run: |
           set -euo pipefail
-          name="lottotool-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu"
+          name="lottotool-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p dist/"$name"
-          cp target/release/lottotool README.md LICENSE eras.toml dist/"$name"/
-          tar -C dist -czf dist/"$name".tar.gz "$name"
+          cp "target/release/${{ matrix.bin }}" README.md LICENSE eras.toml dist/"$name"/
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            (cd dist && tar -a -cf "${name}.zip" "$name")
+            artifact="${name}.zip"
+          else
+            tar -C dist -czf "dist/${name}.tar.gz" "$name"
+            artifact="${name}.tar.gz"
+          fi
+          (cd dist && sha256sum "$artifact" > "${name}.sha256")
+          ls -la dist/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
+        with:
+          path: artifacts
+          pattern: dist-*
+          merge-multiple: true
+      - name: Flatten and checksum index
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' \) -exec cp -t dist {} +
           cd dist
-          sha256sum "$name".tar.gz > SHA256SUMS
+          cat *.sha256 | sort > SHA256SUMS
           cat SHA256SUMS
+          ls -la
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS \
+          shopt -s nullglob
+          assets=(dist/*.tar.gz dist/*.zip dist/SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
             --title "lottotool $GITHUB_REF_NAME" --generate-notes

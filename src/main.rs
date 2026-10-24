@@ -58,6 +58,10 @@ enum Cmd {
         /// Evaluate staleness as of this instant (RFC 3339), default now.
         #[arg(long)]
         now: Option<DateTime<Utc>>,
+        /// Cross-check the N most recent draws against official winning-number
+        /// sources (local / workflow_dispatch only; do not use on schedule).
+        #[arg(long)]
+        crosscheck: Option<usize>,
     },
     /// List eras with sourced/inferred/missing status and exact jackpot odds.
     Eras {
@@ -179,9 +183,21 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                 .iter()
                 .filter(|d| old.iter().any(|o| o.draw_date == d.draw_date && o != *d))
                 .count();
+            let change_list: Vec<(Draw, Draw)> = draws
+                .iter()
+                .filter_map(|d| {
+                    old.iter()
+                        .find(|o| o.draw_date == d.draw_date && *o != d)
+                        .map(|o| (o.clone(), d.clone()))
+                })
+                .collect();
             if !dry_run {
                 data::write_csv(&game.draws_path(&cli.root), &draws, DRAWS_HEADER)?;
                 data::write_csv(&game.missing_path(&cli.root), &missing, MISSING_HEADER)?;
+                if !change_list.is_empty() {
+                    write_changes_md(&cli.root, *game, &change_list)?;
+                }
+                write_meta_json(&cli.root, &eras)?;
             }
             let first = draws.first().map(|d| d.draw_date.to_string());
             let last = draws.last().map(|d| d.draw_date.to_string());
@@ -190,7 +206,8 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                     "{}",
                     json!({"ok": true, "game": game, "source": g.ny_dataset_url, "fetched_rows": raw.len(),
                     "rows": draws.len(), "first_draw": first, "last_draw": last, "added": added, "changed": changed,
-                    "missing_ranges": missing.len(), "dry_run": dry_run})
+                    "missing_ranges": missing.len(), "dry_run": dry_run,
+                    "changes_md": if changed > 0 { format!("data/{}/CHANGES.md", game.id()) } else { String::new() }})
                 );
             } else {
                 println!(
@@ -205,6 +222,12 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                     first.unwrap_or_default(),
                     last.unwrap_or_default()
                 );
+                if changed > 0 {
+                    println!(
+                        "  historical changes documented in data/{}/CHANGES.md",
+                        game.id()
+                    );
+                }
                 for m in &missing {
                     println!(
                         "  null {} {}..{} rows={} {}",
@@ -222,6 +245,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             fail_on_error,
             no_stale,
             now,
+            crosscheck,
         } => {
             let games: Vec<Game> = game
                 .map(|g| vec![g])
@@ -233,6 +257,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                 &check::Options {
                     no_stale: *no_stale,
                     now: *now,
+                    crosscheck: *crosscheck,
                 },
             );
             let fail = check::any_fail(&res);
@@ -285,6 +310,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                     out.push(json!({"game": g.id, "era": e.id, "first_draw": e.first_draw, "last_day": g.era_last_day(i),
                         "first_draw_status": e.first_draw_status, "matrix": format!("{}/{} + 1/{}", e.white_count, e.white_max, e.bonus_max),
                         "matrix_status": e.matrix_status, "price_usd": e.price_usd, "price_status": e.price_status,
+                        "white_group": e.white_group, "bonus_group": e.bonus_group,
                         "jackpot_one_in": m.total().to_string(), "multiplier": e.multiplier, "source": e.source}));
                 }
             }
@@ -441,4 +467,83 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
     }
+}
+
+fn write_changes_md(
+    root: &std::path::Path,
+    game: Game,
+    changes: &[(data::Draw, data::Draw)],
+) -> Result<()> {
+    use std::fmt::Write as _;
+    let path = game.data_dir(root).join("CHANGES.md");
+    let mut body = String::new();
+    let ts = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    writeln!(
+        &mut body,
+        "# Historical row changes — {}\n\nUpdated: {ts} UTC\n",
+        game.id()
+    )?;
+    writeln!(
+        &mut body,
+        "Source republished different values for already-committed draw dates. Review before relying on downstream analytics.\n"
+    )?;
+    writeln!(
+        &mut body,
+        "| draw_date | field | old | new |\n|---|---|---|---|"
+    )?;
+    for (old, new) in changes {
+        let pairs = [
+            ("w1", old.w1.to_string(), new.w1.to_string()),
+            ("w2", old.w2.to_string(), new.w2.to_string()),
+            ("w3", old.w3.to_string(), new.w3.to_string()),
+            ("w4", old.w4.to_string(), new.w4.to_string()),
+            ("w5", old.w5.to_string(), new.w5.to_string()),
+            ("bonus", old.bonus.to_string(), new.bonus.to_string()),
+            (
+                "multiplier",
+                format!("{:?}", old.multiplier),
+                format!("{:?}", new.multiplier),
+            ),
+            ("era_id", old.era_id.clone(), new.era_id.clone()),
+        ];
+        for (field, a, b) in pairs {
+            if a != b {
+                writeln!(&mut body, "| {} | {field} | `{a}` | `{b}` |", old.draw_date)?;
+            }
+        }
+    }
+    std::fs::write(&path, body).with_context(|| format!("writing {}", path.display()))?;
+    Ok(())
+}
+
+fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
+    let mut games = serde_json::Map::new();
+    for gdef in &eras.game {
+        let game = match gdef.id.as_str() {
+            "powerball" => Game::Powerball,
+            "megamillions" => Game::Megamillions,
+            _ => continue,
+        };
+        let draws: Vec<data::Draw> = data::read_csv(&game.draws_path(root)).unwrap_or_default();
+        games.insert(
+            gdef.id.clone(),
+            json!({
+                "rows": draws.len(),
+                "first_draw": draws.first().map(|d| d.draw_date.to_string()),
+                "last_draw": draws.last().map(|d| d.draw_date.to_string()),
+                "ny_dataset": gdef.ny_dataset,
+                "ny_dataset_url": gdef.ny_dataset_url,
+                "current_era": gdef.current_era().id,
+            }),
+        );
+    }
+    let meta = json!({
+        "schema_version": 1,
+        "updated_at": Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        "games": games,
+    });
+    let path = root.join("data").join("meta.json");
+    std::fs::write(&path, serde_json::to_string_pretty(&meta)? + "\n")
+        .with_context(|| format!("writing {}", path.display()))?;
+    Ok(())
 }

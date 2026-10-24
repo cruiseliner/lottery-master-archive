@@ -4,7 +4,7 @@ use crate::Game;
 use crate::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER, MissingRow};
 use crate::eras::{ErasFile, GameDef};
 use crate::ny;
-use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::America::New_York;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -33,6 +33,9 @@ pub struct Options {
     pub no_stale: bool,
     /// Override "now" (tests / reproducibility).
     pub now: Option<DateTime<Utc>>,
+    /// When set, cross-check the N most recent draws per game against official
+    /// winning-number pages (local / workflow_dispatch only; never on schedule).
+    pub crosscheck: Option<usize>,
 }
 
 fn r(game: &str, check: &str, status: Status, detail: impl Into<String>) -> CheckResult {
@@ -44,18 +47,21 @@ fn r(game: &str, check: &str, status: Status, detail: impl Into<String>) -> Chec
     }
 }
 
-/// Most recent scheduled draw date whose data is due by `now`
-/// (due = 00:00 America/New_York on the draw date + stale_grace_hours).
+/// Most recent expected draw date whose data is due by `now`.
+///
+/// Due instant = **06:00 America/New_York on the calendar day after the draw**
+/// (wall-clock; R-10). Equivalent to midnight + 30h outside DST spring-forward.
+/// `stale_grace_hours` remains in eras.toml as documentation of the observed lag.
 pub fn latest_due_draw(g: &GameDef, now: DateTime<Utc>) -> Option<NaiveDate> {
     let today_et = now.with_timezone(&New_York).date_naive();
     let mut d = today_et;
     for _ in 0..30 {
-        if g.is_draw_day(d) {
-            let midnight = New_York
-                .from_local_datetime(&d.and_hms_opt(0, 0, 0)?)
+        if g.expected_draw_day(d) {
+            let next = d.succ_opt()?;
+            let due_local = New_York
+                .from_local_datetime(&next.and_hms_opt(6, 0, 0)?)
                 .earliest()?;
-            let due = midnight + Duration::hours(g.stale_grace_hours);
-            if due.with_timezone(&Utc) <= now {
+            if due_local.with_timezone(&Utc) <= now {
                 return Some(d);
             }
         }
@@ -111,8 +117,10 @@ pub fn run(root: &Path, eras: &ErasFile, games: &[Game], opts: &Options) -> Vec<
                     "draws.ranges",
                     "draws.era_ids",
                     "draws.schedule",
+                    "draws.whites_ascending",
                     "missing.coverage",
                     "staleness",
+                    "crosscheck",
                 ] {
                     out.push(r(gid, c, Status::Skip, "draws.csv not readable"));
                 }
@@ -142,6 +150,7 @@ pub fn run(root: &Path, eras: &ErasFile, games: &[Game], opts: &Options) -> Vec<
         out.extend(check_ranges(gid, g, &draws));
         out.extend(check_era_ids(gid, g, &draws));
         out.extend(check_schedule(gid, g, &draws));
+        out.extend(check_whites_ascending(gid, &draws));
         out.extend(check_missing(root, game, g, &draws));
         if opts.no_stale {
             out.push(r(
@@ -153,6 +162,15 @@ pub fn run(root: &Path, eras: &ErasFile, games: &[Game], opts: &Options) -> Vec<
         } else {
             let now = opts.now.unwrap_or_else(Utc::now);
             out.push(check_stale(gid, g, &draws, now));
+        }
+        match opts.crosscheck {
+            None => out.push(r(
+                gid,
+                "crosscheck",
+                Status::Skip,
+                "not requested (pass --crosscheck N for a local official-source check)",
+            )),
+            Some(n) => out.extend(crate::crosscheck::run(game, &draws, n)),
         }
     }
     out
@@ -251,8 +269,14 @@ fn check_ranges(gid: &str, g: &GameDef, draws: &[Draw]) -> Vec<CheckResult> {
         )
     }];
     if inferred_rows > 0 {
-        v.push(r(gid, "draws.ranges.inferred_eras", Status::Warn,
-            format!("{inferred_rows} rows were checked against eras whose matrix is inferred from data, not sourced (circular for those rows)")));
+        v.push(r(
+            gid,
+            "draws.ranges.inferred_eras",
+            Status::Skip,
+            format!(
+                "{inferred_rows} rows checked against eras whose matrix is inferred from data, not sourced (circular for those rows; not a FAIL)"
+            ),
+        ));
     }
     v
 }
@@ -307,17 +331,18 @@ fn check_schedule(gid: &str, g: &GameDef, draws: &[Draw]) -> Vec<CheckResult> {
                 "draws.schedule_gaps",
                 Status::Pass,
                 format!(
-                    "{} scheduled dates {first}..{last}, none missing",
+                    "{} expected dates {first}..{last}, none missing",
                     expected.len()
                 ),
             )
         } else {
+            // Historical gaps: WARN + MISSING_DRAW (R-04). Due gaps still FAIL via staleness.
             r(
                 gid,
                 "draws.schedule_gaps",
-                Status::Fail,
+                Status::Warn,
                 format!(
-                    "{} scheduled dates absent: {}",
+                    "MISSING_DRAW: {} expected dates absent (document with [[game.schedule_exception]] or accept as WARN): {}",
                     gaps.len(),
                     gaps.iter().take(10).cloned().collect::<Vec<_>>().join(" ")
                 ),
@@ -407,6 +432,36 @@ fn check_missing(root: &Path, game: Game, g: &GameDef, draws: &[Draw]) -> Vec<Ch
     v
 }
 
+fn check_whites_ascending(gid: &str, draws: &[Draw]) -> Vec<CheckResult> {
+    let bad: Vec<String> = draws
+        .iter()
+        .filter(|d| {
+            let w = d.whites();
+            w.windows(2).any(|p| p[0] > p[1])
+        })
+        .map(|d| format!("{} {:?}", d.draw_date, d.whites()))
+        .collect();
+    vec![if bad.is_empty() {
+        r(
+            gid,
+            "draws.whites_ascending",
+            Status::Pass,
+            "all white-ball tuples strictly ascending",
+        )
+    } else {
+        r(
+            gid,
+            "draws.whites_ascending",
+            Status::Fail,
+            format!(
+                "{} non-ascending: {}",
+                bad.len(),
+                bad.iter().take(10).cloned().collect::<Vec<_>>().join("; ")
+            ),
+        )
+    }]
+}
+
 pub fn check_stale(gid: &str, g: &GameDef, draws: &[Draw], now: DateTime<Utc>) -> CheckResult {
     let latest = draws.last().map(|d| d.draw_date);
     match (latest, latest_due_draw(g, now)) {
@@ -414,15 +469,14 @@ pub fn check_stale(gid: &str, g: &GameDef, draws: &[Draw], now: DateTime<Utc>) -
             gid,
             "staleness",
             Status::Skip,
-            "no scheduled draw found in the last 30 days of the schedule",
+            "no expected draw found in the last 30 days of the schedule",
         ),
         (Some(l), Some(due)) if l >= due => r(
             gid,
             "staleness",
             Status::Pass,
             format!(
-                "latest row {l}; latest draw due by now {due} (grace {}h after 00:00 ET)",
-                g.stale_grace_hours
+                "latest row {l}; latest draw due by now {due} (due = 06:00 ET next calendar day)"
             ),
         ),
         (l, Some(due)) => r(
@@ -430,9 +484,8 @@ pub fn check_stale(gid: &str, g: &GameDef, draws: &[Draw], now: DateTime<Utc>) -
             "staleness",
             Status::Fail,
             format!(
-                "STALE: latest row {}, but draw {due} was due by {}h after 00:00 ET on {due}; source lag or failed update",
+                "STALE: latest row {}, but draw {due} was due by 06:00 ET on the next calendar day; source lag or failed update",
                 l.map(|x| x.to_string()).unwrap_or_else(|| "none".into()),
-                g.stale_grace_hours
             ),
         ),
     }

@@ -21,7 +21,7 @@ ny_dataset = "d6yy-54nr"
 ny_dataset_url = "https://data.ny.gov/resource/d6yy-54nr.json"
 draw_time_et = "22:59"
 draw_time_source = "Florida Lottery Powerball rules PDF (about 10:59 p.m. ET); retrieved 2026-10-23"
-# Hours after 00:00 ET on the draw date by which the NY row is expected to exist.
+# Documented observed lag. Runtime due = 06:00 America/New_York next calendar day (R-10).
 # Observed NY rowsUpdatedAt about 03:30-03:40 ET the morning after the draw (2026-10-22 03:38 EDT).
 stale_grace_hours = 30
 
@@ -111,6 +111,7 @@ ny_dataset = "5xaw-6ayf"
 ny_dataset_url = "https://data.ny.gov/resource/5xaw-6ayf.json"
 draw_time_et = "23:00"
 draw_time_source = "megamillions.com PrizeMatrix FooterText ('held Tuesday and Friday at 11:00 pm ET'); retrieved 2026-10-23"
+# Documented observed lag. Runtime due = 06:00 America/New_York next calendar day (R-10).
 stale_grace_hours = 30
 
 [[game.schedule]]

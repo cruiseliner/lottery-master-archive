@@ -187,5 +187,40 @@ pub fn missing_rows(game: Game, g: &GameDef, draws: &[Draw]) -> Vec<MissingRow> 
             out.push(r);
         }
     }
+    // R-04: historical expected-draw gaps → documented as field=draw / MISSING_DRAW.
+    if let (Some(first), Some(last)) = (draws.first(), draws.last()) {
+        let have: std::collections::HashSet<_> = draws.iter().map(|d| d.draw_date).collect();
+        let mut gap_run: Option<(chrono::NaiveDate, chrono::NaiveDate, usize)> = None;
+        let flush =
+            |out: &mut Vec<MissingRow>,
+             run: &mut Option<(chrono::NaiveDate, chrono::NaiveDate, usize)>| {
+                if let Some((a, b, n)) = run.take() {
+                    out.push(MissingRow {
+                    game: game.id().into(),
+                    field: "draw".into(),
+                    first_draw: a,
+                    last_draw: b,
+                    rows: n,
+                    status: "MISSING_DRAW".into(),
+                    reason: "expected draw date absent from source; add [[game.schedule_exception]] if cancelled/moved".into(),
+                    source: format!("ny:{}", g.ny_dataset),
+                });
+                }
+            };
+        for d in g.scheduled_dates(first.draw_date, last.draw_date) {
+            if have.contains(&d) {
+                flush(&mut out, &mut gap_run);
+                continue;
+            }
+            match gap_run.as_mut() {
+                Some((_a, b, n)) => {
+                    *b = d;
+                    *n += 1;
+                }
+                None => gap_run = Some((d, d, 1)),
+            }
+        }
+        flush(&mut out, &mut gap_run);
+    }
     out
 }

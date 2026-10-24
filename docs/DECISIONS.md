@@ -15,3 +15,9 @@ Status labels: Fact = cited, Inference = reasoned. Approval refs are the owner's
 | D-009 | 2026-10-23 | Seeded ChaCha20 (`rand_chacha` 0.10), with rejection sampling for uniform ranges and partial Fisher-Yates for picks | Determinism tests (tests/rng.rs) |
 | D-010 | 2026-10-23 | HTTP: ureq 2 with gzip+brotli decoding, plus 3 attempts for powerball.com pages | Fact: on 2026-10-23 the same URL returned identity, gzip and br bodies across requests; with identity-only or gzip-only decoding, fetches intermittently failed with "no winners-table in page" (1 of 3 consecutive national fetches in testing) |
 | D-011 | 2026-10-23 | `scripts/relay/` targets the Anthropic Messages API (`POST /v1/messages`, `x-api-key`, `anthropic-version`). Model and version are required from `.env` with no defaults | docs.anthropic.com/en/api/messages, checked 2026-10-23 |
+| D-012 | 2026-10-23 | Keep `on.schedule.timezone: America/New_York`; add 10:17 ET retry cron | Fact: GitHub docs (retrieved 2026-10-23) document IANA `timezone` on schedule entries. R-03/R-11 |
+| D-013 | 2026-10-23 | Keep-alive and inactivity WARN key off **non-bot** commits; quote 60-day public-repo rule | Fact: 60-day disable text. Docs silent on bot commits → Inference they do not count. R-02 |
+| D-014 | 2026-10-23 | Staleness due = wall-clock 06:00 ET on the calendar day after the draw | Preferred over midnight+30h across DST spring-forward. R-10 |
+| D-015 | 2026-10-23 | Historical schedule gaps WARN (`MISSING_DRAW`) + optional `[[game.schedule_exception]]`; due gaps FAIL via staleness | R-04 |
+| D-016 | 2026-10-23 | Official winning-number crosscheck is opt-in (`--crosscheck N`), never on the scheduled path | R-06 / OI-15 |
+| D-017 | 2026-10-23 | Drop README line "Past results do not change future odds" | Owner t225u: that line was ours, not requested. Keep non-affiliation + confirm-with-official. R-14 |

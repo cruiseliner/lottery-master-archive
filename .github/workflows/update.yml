@@ -1,22 +1,30 @@
 # Scheduled data update: NY Open Data winning numbers -> data/<game>/{draws,missing}.csv
 #
-# Timing (see docs/DECISIONS.md D-007):
+# Timing (see docs/DECISIONS.md D-007, D-012):
 #   Powerball draws Mon/Wed/Sat ~22:59 ET, Mega Millions Tue/Fri ~23:00 ET.
 #   NY Open Data rows were observed to appear ~03:30-03:40 ET the next morning.
-#   We run once a day at 06:17 America/New_York (after every draw night; off-minute to
-#   avoid top-of-hour scheduler congestion). On non-draw mornings the run is a no-op.
-# Staleness: a draw is "due" 30h after 00:00 ET on the draw date (eras.toml
-#   stale_grace_hours), i.e. 06:00 ET the next morning, so a missing row turns this
-#   workflow red (visible failure) instead of silently passing.
-# Keep-alive: GitHub disables schedules in public repos after 60 days without repository
-#   activity; if the last commit is older than 45 days we commit docs/.keepalive.
+#   Primary run 06:17 America/New_York; retry 10:17 America/New_York (R-11).
+#   timezone key is supported (Fact: docs.github.com workflow-syntax on.schedule, Mar 2026).
+# Staleness: draw D is due at wall-clock 06:00 ET on D+1 (DST-safe; see D-013).
+# Keep-alive: public repos disable schedules after 60 days without repository activity
+#   (Fact: docs.github.com). Whether GITHUB_TOKEN/bot commits count is NOT stated in that
+#   doc (Inference: community practice says they do not). We warn on days since last
+#   non-bot commit and key the keepalive on that age.
 name: update
 
 on:
   schedule:
     - cron: "17 6 * * *"
       timezone: "America/New_York"
+    - cron: "17 10 * * *"
+      timezone: "America/New_York"
   workflow_dispatch:
+    inputs:
+      force_now:
+        description: "RFC3339 override for staleness (empty = real now). Use a future instant to prove the stale gate goes red."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -25,22 +33,27 @@ concurrency:
   group: data-update
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Rust toolchain (stable)
         run: |
+          set -euo pipefail
           rustup toolchain install stable --profile minimal
           rustup default stable
           rustc --version
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
@@ -52,47 +65,97 @@ jobs:
         run: cargo build --release --locked
 
       - name: Update Powerball
-        run: ./target/release/lottotool update powerball
+        id: pb
+        run: |
+          set -euo pipefail
+          ./target/release/lottotool --json update powerball | tee /tmp/pb.json
+          echo "added=$(python3 -c 'import json;print(json.load(open("/tmp/pb.json"))["added"])')" >> "$GITHUB_OUTPUT"
+          echo "changed=$(python3 -c 'import json;print(json.load(open("/tmp/pb.json"))["changed"])')" >> "$GITHUB_OUTPUT"
 
       - name: Update Mega Millions
-        run: ./target/release/lottotool update megamillions
+        id: mm
+        run: |
+          set -euo pipefail
+          ./target/release/lottotool --json update megamillions | tee /tmp/mm.json
+          echo "added=$(python3 -c 'import json;print(json.load(open("/tmp/mm.json"))["added"])')" >> "$GITHUB_OUTPUT"
+          echo "changed=$(python3 -c 'import json;print(json.load(open("/tmp/mm.json"))["changed"])')" >> "$GITHUB_OUTPUT"
 
       - name: Integrity gate (all checks except staleness)
         run: ./target/release/lottotool check --fail-on-error --no-stale
 
       - name: Commit data changes
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/
           if git diff --cached --quiet; then
             echo "No data changes."
           else
-            git commit -m "data: NY Open Data update $(date -u +%Y-%m-%dT%H:%MZ)"
+            pb_a=${{ steps.pb.outputs.added }}; pb_c=${{ steps.pb.outputs.changed }}
+            mm_a=${{ steps.mm.outputs.added }}; mm_c=${{ steps.mm.outputs.changed }}
+            msg="data: NY Open Data update $(date -u +%Y-%m-%dT%H:%MZ) (pb +${pb_a}/~${pb_c}, mm +${mm_a}/~${mm_c})"
+            if [ "${pb_c}" != "0" ] || [ "${mm_c}" != "0" ]; then
+              msg="${msg}; historical row changes listed in data/*/CHANGES.md (R-05)"
+            fi
+            git commit -m "$msg"
+            git pull --rebase origin main
             git push
           fi
 
-      - name: Keep-alive (avoid 60-day schedule disable)
+      - name: Keep-alive and non-bot activity warning
         run: |
-          last=$(git log -1 --format=%ct)
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           now=$(date +%s)
-          age_days=$(( (now - last) / 86400 ))
-          echo "Last commit age: ${age_days} days"
-          if [ "$age_days" -ge 45 ]; then
+          # Official quote (docs.github.com, Disabling and enabling a workflow):
+          # "In a public repository, scheduled workflows are automatically disabled when
+          #  no repository activity has occurred in 60 days."
+          # Whether GITHUB_TOKEN / github-actions[bot] commits count as that activity is
+          # NOT stated in the official docs (Inference from community keepalive tooling:
+          # they do not). Warn on days since last non-bot commit.
+          nonbot_line=$(git log --format='%ct %an <%ae>' | grep -vE '\[bot\]|github-actions|41898282\+github-actions' | head -1 || true)
+          if [ -z "$nonbot_line" ]; then
+            nonbot_age=9999
+            echo "WARNING: no non-bot commits found in history"
+          else
+            nonbot_ts=${nonbot_line%% *}
+            nonbot_age=$(( (now - nonbot_ts) / 86400 ))
+            echo "Last non-bot commit: ${nonbot_line} (${nonbot_age} days ago)"
+          fi
+          echo "days_since_nonbot=${nonbot_age}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$nonbot_age" -ge 45 ]; then
+            echo "::warning::Days since last non-bot commit: ${nonbot_age}. Official docs disable schedules after 60 days without repository activity; whether bot commits count is unverified. Owner touch recommended."
             date -u +%Y-%m-%dT%H:%M:%SZ > docs/.keepalive
+            echo "nonbot_age_days=${nonbot_age}" >> docs/.keepalive
             git add docs/.keepalive
-            git commit -m "chore: keep-alive (last commit ${age_days} days ago)"
-            git push
+            if git diff --cached --quiet; then
+              echo "keepalive unchanged"
+            else
+              git commit -m "chore: keep-alive (last non-bot commit ${nonbot_age} days ago)"
+              git pull --rebase origin main
+              git push
+            fi
           fi
 
       - name: Full check incl. staleness (fails visibly if a due draw is absent)
+        # R-01: shell: bash => bash -eo pipefail, so a FAIL from check is not hidden by tee.
+        shell: bash
         run: |
-          ./target/release/lottotool check --fail-on-error | tee check.txt
-          ./target/release/lottotool --json check > check.json || true
+          set -euo pipefail
+          args=(check --fail-on-error)
+          force_now='${{ inputs.force_now }}'
+          if [ -n "${force_now}" ]; then
+            echo "Using --now ${force_now} (workflow_dispatch force_now)"
+            args+=(--now "${force_now}")
+          fi
+          ./target/release/lottotool "${args[@]}" | tee check.txt
+          ./target/release/lottotool --json "${args[@]}" > check.json || true
 
       - name: Upload check report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: check-report
           path: |

@@ -1,0 +1,1 @@
+PROOF: tracked cache file must make CI red (R3-06 / A-06). Delete this branch after.

@@ -105,8 +105,10 @@ Empty `force_now` green proof on final code: see run id below after push.
 - Docs: `docs/REVIEWS/2026-10-24_claude_phase3.md`, `…_response.md`, `/workspace/lottery-master/claude_response_phase3.md`.
 - D-018..D-022; OI-17 CLOSED; OI-18..OI-22 added.
 
-### Post-push (fill after CI / dispatch)
+### Post-push (America/New_York)
 
-- Commit: (this Phase 3.1 commit sha)
-- CI run id:
-- Empty force_now update run id:
+- Commit: `655e6cc` Phase 3.1
+- CI run `40055700823`: **success**
+- Empty `force_now` update run `40055704478`: **success**; log line `No data changes.`; origin/main stayed on `655e6cc` (R2-03 no-op proved in GHA). Full check step success. FORCE_NOW empty (dispatch).
+- Blob URLs (raw 200): src/rng.rs, tests/rng.rs, scripts/relay/relay.py, src/payouts.rs on main.
+- Paste: `docs/REVIEWS/2026-10-24_claude_phase3_response.md` (= `/workspace/lottery-master/claude_response_phase3.md`).

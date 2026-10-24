@@ -65,6 +65,31 @@ Node-24 / `ubuntu-24.04` / exact `rust-toolchain` bumps **DEFERRED** (workflows/
 
 **Saturday watch:** 06:17 / 10:17 ET results will be appended by a separate routine. Workflows / eras.toml / data/ are **frozen** until 10:17 completes.
 
+
+### 2026-10-24 ~08:58 America/New_York — schedule diagnosis read-only checks (t234u)
+
+**Fact — workflow state:** `gh workflow list` / API: workflow `update` (id 394656475, path `.github/workflows/update.yml`) **`state: active`**. Not disabled. Repo `disabled: false`, Actions present.
+
+**Fact — workflow-file error banner:** Actions page https://github.com/cruiseliner/lottery-master-archive/actions/workflows/update.yml shows **5 runs**, all labeled “Manually run by cruiseliner”. HTML parse: **no** “Invalid workflow file”, “Unable to process”, “This scheduled workflow is disabled”, or “Schedule has been disabled” banner. (Only the generic hidden `ajax-error-message` flash-error template, not a workflow validation banner.)
+
+**Fact — YAML indent on main (`origin/main` tip `159dd5e`):** `timezone:` is indented **inside the same list item** as `cron:` (not a sibling of `schedule:`):
+
+```yaml
+on:
+  schedule:
+    - cron: "17 6 * * *"
+      timezone: "America/New_York"
+    - cron: "17 10 * * *"
+      timezone: "America/New_York"
+  workflow_dispatch:
+```
+
+**Fact — tip hash of `update.yml` on main:** blob `de30d9e1699b56597f663e0fe4ef65329c807b95` (last content change in commit `655e6cc` Phase 3.1; unchanged through docs tip `159dd5e`).
+
+**Fact — `event=schedule` count (re-check ~08:58 ET):** **0**. API `…/workflows/394656475/runs?event=schedule` → `total_count: 0`. All 5 historical update runs are `workflow_dispatch` only. No 06:17 (or 02:17) scheduled run has appeared.
+
+**Inference:** Indent/registration shape matches GitHub’s documented form, so a “timezone as sibling of schedule” mis-indent is **not** supported by the file on main. Remaining open explanations for zero schedule runs are late/dropped schedule (no SLA) vs schedule not registered for another reason — held until 10:17 facts (per Claude t234u). **No** manual dispatch; freeze holds.
+
 ## FROM CLAUDE
 
 ### 2026-10-24 morning (America/New_York) — owner-pasted from chat t233u
@@ -95,6 +120,43 @@ Saturday readout. When you report the two runs, these are the facts I need:
 - Run URLs, and confirmation that the cargo test count is still 39.
 
 I’ll hold any verdict on R-03 and R2-03 until then. The workflow, eras and data freeze looks right until 10:17 completes.
+```
+
+### 2026-10-24 morning (America/New_York) — owner-pasted from chat t234u
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+Zero runs at 8:53 is a result the schedule-watch table doesn’t cover. It only has rows for a run at 02:17, 06:17 or 10:17, and nothing has appeared at any of them. It’s also not the “timezone key ignored” case, which would have produced a 02:17 run.
+
+What I checked. GitHub’s workflow syntax now supports a timezone field on schedule entries. A third-party reference says it has been supported since March 2026, with an IANA name placed next to each cron: entry. GitHub’s own docs commit shows the same example, with timezone: "America/New_York" directly under cron. So the key itself shouldn’t be the problem. A missing 06:17 run points to one of these: cronuru (https://cronuru.com/dialects/github-actions)github (https://github.com/github/docs/commit/1ead651)
+
+- Late or dropped run. There’s no SLA on scheduled run timing. A 2.5-hour miss is long, but it’s possible. cronuru (https://cronuru.com/dialects/github-actions)
+- Schedule not registered. This would happen if timezone sits in the wrong place in the YAML, for example as a sibling of schedule instead of inside the list item. GitHub would normally flag that on the workflow page.
+
+Read-only checks that don’t touch the freeze:
+
+1. Open Actions → update.yml and look for a workflow-file error banner or a “disabled” state.
+2. Confirm the timezone: line is indented inside the same list item as cron:.
+3. Confirm the file on main is the version you expect.
+
+I’d avoid a manual dispatch before 10:17. It would muddy the one clean observation you have left.
+
+The 10:17 interpretation changes. The table says “10:17 makes a commit → meta churn, R2-03 not actually fixed.” That reading assumed 06:17 had already added the 2026-10-23 MM row. If 06:17 never ran, a commit at 10:17 is expected, because it’s the first run with something to add. So judge R2-03 by what the commit contains. A data row only is fine, and meta-only changes mean churn. The cleaner test is the next run with no new draw, which should produce no commit.
+
+Outcomes for the 10:45 check:
+
+- 10:17 runs on time and adds the MM row. The schedule works and the 06:17 miss was a drop or delay. R-03 stays open until a second on-time run, and R2-03 waits for the no-new-draw run.
+- 10:17 doesn’t run either. The schedule isn’t firing. Unfreezing to fix it becomes your call, and I’d want the workflow YAML before advising.
+
+For the readout, please add these to the earlier list:
+
+- Whether the workflow page shows any validation error.
+- The github.event.schedule value in the run log.
+- Whether the run’s trigger is listed as schedule.
+- The commit’s file list, if 10:17 commits.
+
+I’m holding any verdict on R-03 and R2-03 until those facts are in.
 ```
 
 ## Standing rules (executor)

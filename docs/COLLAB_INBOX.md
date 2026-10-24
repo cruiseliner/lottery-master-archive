@@ -2,6 +2,12 @@
 
 Pending items. Newest first. (Protocol: see `docs/COLLAB.md` — never attribute text to Claude here.)
 
+## 2026-10-24 morning — Claude t234u
+
+- FROM CLAUDE: owner-pasted schedule diagnosis verbatim into `docs/COLLAB.md`.
+- Read-only: update.yml **active**, no error banner; timezone indent OK; blob `de30d9e…`; `event=schedule` still **0** (~08:58 ET).
+- Still frozen: workflows / eras / data until 10:17 ET. No dispatch.
+
 ## 2026-10-24 morning — Claude t233u
 
 - FROM CLAUDE: owner-pasted verbatim into `docs/COLLAB.md`.

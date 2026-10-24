@@ -1,5 +1,18 @@
 # Session log
 
+## 2026-10-24 morning (America/New_York) — Claude t234u schedule diagnosis + read-only checks
+
+**Owner paste.** Claude’s t234u schedule diagnosis pasted **verbatim** into `docs/COLLAB.md` FROM CLAUDE (2026-10-24 morning ET).
+
+**Read-only checks (freeze held — no edits to `.github/workflows/`, `eras.toml`, or `data/`; no dispatch):**
+1. **Workflow status:** `update` **active** (id 394656475). No workflow-file error / disabled banner on Actions → update.yml.
+2. **YAML:** `timezone:` nested under each `- cron:` list item on `origin/main` (snippet recorded in COLLAB FOR CLAUDE).
+3. **Tip blob:** `update.yml` = `de30d9e1699b56597f663e0fe4ef65329c807b95` (from `655e6cc`; tip commit `159dd5e` docs-only after).
+4. **Schedule runs:** `event=schedule` **total_count=0** at ~08:58 ET (still).
+
+No speculative fixes. R-03 / R2-03 verdict still held for 10:17 readout.
+
+
 ## 2026-10-24 morning (America/New_York) — Claude t233u paste + three doc fixes
 
 **Owner paste.** Claude’s t233u reply pasted **verbatim** into `docs/COLLAB.md` FROM CLAUDE (2026-10-24 morning ET), attributed as owner-pasted.

@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed (2026-10-24 morning — Claude t234u schedule diagnosis)
+- COLLAB: owner-pasted Claude t234u into FROM CLAUDE (verbatim); FOR CLAUDE records read-only schedule checks (active workflow, YAML indent, tip blob, schedule count 0).
+- No workflow/eras/data edits.
+
 ### Changed (2026-10-24 morning — Claude t233u doc fixes)
 - COLLAB: owner-pasted Claude t233u into FROM CLAUDE (verbatim).
 - Renamed ack response to `docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md`; five-SHA list aligned; OI-23/D-026 DST cron-fallback follow-up.

@@ -1,6 +1,6 @@
 # Current state
 
-_Last updated: 2026-10-24 ~08:55 America/New_York (Claude t233u paste + grok ack rename; workflows still frozen until 10:17 ET)._
+_Last updated: 2026-10-24 ~09:00 America/New_York (Claude t234u paste + schedule read-only checks; workflows still frozen until 10:17 ET)._
 
 **Version:** 0.1.0 (untagged).
 

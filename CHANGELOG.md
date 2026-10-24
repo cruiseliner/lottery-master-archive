@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed (Overnight 2026-10-23/24 — Phase 3.1 ack, allowed subset)
+- docs: COLLAB protocol (owner+Claude); CROSSCHECK_LOG; OI-19..22 + D-023..025; Phase 3.1 ack response.
+- tests: DST due-boundary tests for 2026-11-01 fall-back and 2027-03-14 spring-forward (A-07).
+- A-03 workflow/toolchain bumps **not** applied (frozen until after Sat 10:17 ET).
+
 ### Changed (Phase 3.1 — Claude Phase 3 / areas 7–8, 2026-10-24)
 - meta.json schema 2: tool_version + CSV sha256; updated_at only when data digests change (R2-03).
 - update.yml: no keep-alive commit (R2-02); 06:17 stale WARN / 10:17 FAIL (R2-05); CHANGES artifact (R2-08); FORCE_NOW via env.

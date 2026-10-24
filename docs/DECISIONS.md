@@ -26,3 +26,6 @@ Status labels: Fact = cited, Inference = reasoned. Approval refs are the owner's
 | D-020 | 2026-10-24 | `meta.json` schema 2: sha256 per CSV + tool_version; `updated_at` only when rows/last_draw/sha256 change | R2-03; eliminates updated_at-only bot commits that caused run #3 rebase conflict |
 | D-021 | 2026-10-24 | Pool groups = `{pb\|mm}-{white\|bonus}-{max}`; refuse mixed maxima in validate/summary | R2-04; mm-2017/mm-2025 share white-70 |
 | D-022 | 2026-10-24 | 06:17 ET staleness = WARN; 10:17 ET + dispatch = FAIL | R2-05 |
+| D-023 | 2026-10-24 | First live Anthropic relay only after: dry-run success, one tiny live call, explicit spend limit; allowlisted files only; output untrusted / never auto-applied | Claude Phase 3.1 ack A-04 / R3-03; owner+Claude. No live call overnight. |
+| D-024 | 2026-10-24 | Overnight freeze: no edits to `.github/workflows/`, `eras.toml`, or `data/` until Sat 2026-10-24 10:17 ET scheduled run completes | Owner+Claude t232u: first real timezone/schedule proof must not be disturbed by workflow bumps |
+| D-025 | 2026-10-24 | R2-06 crosscheck cadence hard trigger = before v0.2 `grade` ships; overnight started `docs/CROSSCHECK_LOG.md` with one `--crosscheck 10` | Claude Phase 3.1 ack A-02 |

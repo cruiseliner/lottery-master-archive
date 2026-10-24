@@ -312,3 +312,43 @@ fn schema_files_match_code() {
         assert_eq!(s.trim_end(), h, "{f}");
     }
 }
+
+/// Fall-back 2026-11-01: 06:00 America/New_York is EST (UTC-5) → 11:00 UTC.
+/// Powerball Sat 2026-10-31 is due Sun 2026-11-01 06:00 ET.
+#[test]
+fn dst_fallback_2026_11_01_due_at_1100_utc() {
+    let e = eras();
+    let g = e.game("powerball").unwrap();
+    let before = Utc.with_ymd_and_hms(2026, 11, 1, 10, 59, 0).unwrap();
+    let after = Utc.with_ymd_and_hms(2026, 11, 1, 11, 1, 0).unwrap();
+    assert_eq!(
+        check::latest_due_draw(g, before),
+        Some(d("2026-10-28")),
+        "10:59Z must still be before 06:00 EST due for Sat 10-31"
+    );
+    assert_eq!(
+        check::latest_due_draw(g, after),
+        Some(d("2026-10-31")),
+        "11:01Z must make Sat 2026-10-31 due"
+    );
+}
+
+/// Spring-forward 2027-03-14: 06:00 America/New_York is EDT (UTC-4) → 10:00 UTC.
+/// Powerball Sat 2027-03-13 is due Sun 2027-03-14 06:00 ET.
+#[test]
+fn dst_spring_forward_2027_03_14_due_at_1000_utc() {
+    let e = eras();
+    let g = e.game("powerball").unwrap();
+    let before = Utc.with_ymd_and_hms(2027, 3, 14, 9, 59, 0).unwrap();
+    let after = Utc.with_ymd_and_hms(2027, 3, 14, 10, 1, 0).unwrap();
+    assert_eq!(
+        check::latest_due_draw(g, before),
+        Some(d("2027-03-10")),
+        "09:59Z must still be before 06:00 EDT due for Sat 03-13"
+    );
+    assert_eq!(
+        check::latest_due_draw(g, after),
+        Some(d("2027-03-13")),
+        "10:01Z must make Sat 2027-03-13 due"
+    );
+}

@@ -20,7 +20,7 @@
 | OI-16 | CI | Confirm first real scheduled run starts at 06:17 America/New_York after dual-cron+timezone change | WATCH (first window Sat 2026-10-24) |
 | OI-17 | Review | Claude R-15 / R2-09 hypergeometric helpers | CLOSED (R2-09; exact R-15 text was unrecovered, used Claude restatement) |
 | OI-18 | CI | Owner calendar reminder: touch the public repo before the 60-day schedule disable (no bot keep-alive commit) | OPEN (R2-02) |
-| OI-19 | Design | R3-09 v0.3 design note (Claude areas 7–8 follow-up) | DEFERRED to v0.3 |
-| OI-20 | CI | R2-06 crosscheck cadence + CROSSCHECK_LOG.md | DEFERRED |
-| OI-21 | CI | R2-07 workflow hygiene (b–d): verify SHA-tag pins, Node24/ubuntu-24.04, pin rust-toolchain version | DEFERRED |
-| OI-22 | Relay | R3-03 remaining hardening before first live relay run | DEFERRED |
+| OI-19 | Design | R3-09 v0.3: before v0.3 starts, capture **per-ticket derived seeds** (master seed, model, draw date, index) + **algorithm version** | DEFERRED to v0.3 (gate spelled out 2026-10-24) |
+| OI-20 | CI | R2-06 crosscheck cadence + CROSSCHECK_LOG.md; trigger = before v0.2 grade ships | OPEN (log started 2026-10-24; cadence still DEFERRED) |
+| OI-21 | CI | R2-07: SHA↔tag pins **verified OK** 2026-10-24; Node-24 / ubuntu-24.04 / rust-toolchain=1.99.1 bumps **FROZEN** until after Sat 10:17 ET | DEFERRED (verify done; bumps after 10:17) |
+| OI-22 | Relay | R3-03 before first live call: (1) dry-run (2) one tiny live call (3) spend limit; allowlisted files only; relay output untrusted / never auto-applied | DEFERRED (conditions accepted 2026-10-24) |

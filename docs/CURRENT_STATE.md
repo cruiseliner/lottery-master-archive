@@ -1,6 +1,6 @@
 # Current state
 
-_Last updated: 2026-10-23 ~22:50 America/New_York (Phase 3.1 R2+R3; v0.2 not started)._
+_Last updated: 2026-10-23 ~23:05 America/New_York (overnight A-01/A-02/A-07; workflows frozen until Sat 10:17 ET)._
 
 **Version:** 0.1.0 (untagged).
 
@@ -9,19 +9,16 @@ _Last updated: 2026-10-23 ~22:50 America/New_York (Phase 3.1 R2+R3; v0.2 not sta
 - Mega Millions: 2,550 draws, 2002-05-17..2026-10-20.
 - `data/meta.json` schema_version **2** (tool_version, per-CSV sha256; stable updated_at).
 
-**Checks:** `lottotool check --fail-on-error --no-stale` → 24 pass / 0 warn / 0 fail / 6 skip.
+**Checks:** `lottotool check --no-stale --crosscheck 10` → 26 pass / 0 warn / 0 fail / 4 skip (crosscheck 10/10 both games).
 
-**Tests:** check 11, odds 8, payouts 5, pool 4, rng 7 (+ lib/crosscheck). Clippy `-D warnings` and rustfmt clean.
+**Tests:** `cargo test --locked` → **39 passed** (check 13 incl. 2 DST, odds 8, payouts 5, pool 4, rng 7, lib 2). Clippy / rustfmt not re-bumped overnight.
 
-**Automation:**
-- `update.yml`: 06:17 (stale WARN) + 10:17 (stale FAIL) America/New_York; empty/`force_now` dispatch; no keep-alive commit (D-018); CHANGES artifact on historical edits; `FORCE_NOW` via env.
-- `ci.yml`: + R3-06 refuse tracked `cache/` / non-header payouts CSVs.
-- `release.yml`: untested (no tag).
+**Automation:** unchanged overnight (freeze D-024). `update.yml` still dual cron America/New_York; empty force_now green run 40055704478.
+
+**Collab:** [`docs/COLLAB.md`](COLLAB.md) — protocol + FOR CLAUDE. Ack paste: `docs/REVIEWS/2026-10-24_claude_phase31_ack_response.md`.
 
 **GitHub:** https://github.com/cruiseliner/lottery-master-archive
 
-**Payouts:** cache-only; R3-04/05 HTTP policy; robots noted in SOURCES.
+**Relay:** drafted; **not run** against API (OI-22 / D-023).
 
-**Relay:** drafted; REVIEWER_PROMPT; allowlist + secret scan; **not run** against API.
-
-See `docs/REVIEWS/2026-10-24_claude_phase3.md`, `docs/OPEN_ISSUES.md`.
+See OPEN_ISSUES, DECISIONS, CROSSCHECK_LOG.

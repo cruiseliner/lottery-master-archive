@@ -1,5 +1,20 @@
 # Session log
 
+## 2026-10-23/24 overnight (America/New_York) — Phase 3.1 ack A-01..A-07 (allowed subset)
+
+**Scope.** Adam sleeping; Claude Phase 3.1 acknowledgement (t231u) + overnight freeze (t232u). No v0.2, no live relay, no Lottery Master bot. Workflows / eras.toml / data/ **frozen** until Sat 10:17 ET completes.
+
+**Done:**
+- COLLAB protocol (owner+Claude verbatim) + FOR CLAUDE evidence; CROSSCHECK_LOG; OI-19/20/21/22 + D-023..025.
+- A-01 evidence pack; A-02 `--crosscheck 10` (10/10 PB + MM).
+- A-03: SHA↔tag verify OK; bumps deferred (freeze).
+- A-07: DST tests `dst_fallback_2026_11_01_*`, `dst_spring_forward_2027_03_14_*`.
+- A-06: throwaway R3-06 red proof (branch deleted).
+- `cargo test --locked`: **39 passed**.
+
+**Deferred / frozen:** Node-24 / ubuntu-24.04 / rust-toolchain pin bumps; Saturday 06:17+10:17 watch (separate routine).
+
+
 ## 2026-10-23 Phase 1 foundation (executor agent, America/New_York times)
 
 **Scope.** Owner approval "proceed" (t219u). The defaults it approved:

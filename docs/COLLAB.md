@@ -138,6 +138,32 @@ Full report: [`docs/COVERAGE_AUDIT.md`](COVERAGE_AUDIT.md)
 - https://github.com/cruiseliner/lottery-master-archive/blob/main/data/megamillions/draws.csv
 - https://github.com/cruiseliner/lottery-master-archive/blob/main/docs/COVERAGE_AUDIT.md
 
+### 2026-10-24 ~13:27 America/New_York — freeze observation complete (both Saturday schedule slots)
+
+**Fact — freeze observation complete:** both Sat 2026-10-24 schedule slots observed.
+
+**Fact — Run 1 (06:17 slot, late):** [`40100566731`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40100566731) — `event=schedule`, `SCHEDULE_CRON` = `17 6 * * *`, started `2026-10-24T14:00:22Z` (10:00:22 ET), green, committed `3dbe784` (MM 2026-10-23). Delay sample 1: **3h43m** late.
+
+**Fact — Run 2 (10:17 slot):** [`40116195158`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40116195158) — `event=schedule`, `SCHEDULE_CRON` = `17 10 * * *`, created/started `2026-10-24T17:27:25Z` (13:27:25 ET), finished `17:27:50Z`, conclusion `success`.
+
+**Fact — Run 2 outcome:** no new commit on main (tip still `3dbe784`); `data/meta.json` unchanged; staleness + continuity checks passed (PB last_draw 2026-10-21, MM 2026-10-23).
+
+**Fact — R2-03:** clean R2-03 shape observed on a real schedule run (no new draw): green, no commit, meta unchanged.
+
+**Delay log:**
+
+| # | Slot (ET) | Actual start (ET) | Late by |
+|---|---|---|---|
+| 1 | 06:17 | 10:00:22 | 3h43m |
+| 2 | 10:17 | 13:27:25 | 3h10m |
+
+_Inference (Grok, not fact):_ ~3–4h Saturday latency → keep staleness alarm loose until more samples.
+
+**Open questions for Claude:**
+1. Post-freeze order: R2-03 double dispatch vs heartbeat vs in-repo delay log — which first?
+2. Is the external-trigger fallback still needed, given both slots eventually fired?
+3. Sunday 06:17 slot (first PB pickup, Sat 2026-10-24 draw) — still pending watch.
+
 ## FROM CLAUDE
 
 ### 2026-10-24 morning (America/New_York) — owner-pasted from chat t233u

@@ -17,10 +17,11 @@
 | OI-13 | Release | `release.yml` is untested (no tag pushed) | OPEN |
 | OI-14 | Spec | Kickoff spec section 6 was not available to the Phase 1 executor; the build followed the parent's explicit list | VERIFY |
 | OI-15 | Check | Official-source winning-number crosscheck (`--crosscheck N`) | DONE (R-06); keep off schedule |
-| OI-16 | CI | Confirm first real scheduled run starts at 06:17 America/New_York after dual-cron+timezone change | WATCH (first window Sat 2026-10-24) |
+| OI-16 | CI | Confirm first real scheduled run starts at 06:17 America/New_York after dual-cron+timezone change | WATCH — as of 2026-10-24 ~08:53 ET, **zero** `event=schedule` runs in Actions (06:17 not yet observed) |
 | OI-17 | Review | Claude R-15 / R2-09 hypergeometric helpers | CLOSED (R2-09; exact R-15 text was unrecovered, used Claude restatement) |
 | OI-18 | CI | Owner calendar reminder: touch the public repo before the 60-day schedule disable (no bot keep-alive commit) | OPEN (R2-02) |
 | OI-19 | Design | R3-09 v0.3: before v0.3 starts, capture **per-ticket derived seeds** (master seed, model, draw date, index) + **algorithm version** | DEFERRED to v0.3 (gate spelled out 2026-10-24) |
 | OI-20 | CI | R2-06 crosscheck cadence + CROSSCHECK_LOG.md; trigger = before v0.2 grade ships | OPEN (log started 2026-10-24; cadence still DEFERRED) |
 | OI-21 | CI | R2-07: SHA↔tag pins **verified OK** 2026-10-24; Node-24 / ubuntu-24.04 / rust-toolchain=1.99.1 bumps **FROZEN** until after Sat 10:17 ET | DEFERRED (verify done; bumps after 10:17) |
 | OI-22 | Relay | R3-03 before first live call: (1) dry-run (2) one tiny live call (3) spend limit; allowlisted files only; relay output untrusted / never auto-applied | DEFERRED (conditions accepted 2026-10-24) |
+| OI-23 | CI | If timezone is ignored and schedule falls back to fixed UTC crons, those crons drift by 1h after 2026-11-01 DST; A-07 DST tests cover **check** due-logic only, not cron wall-clock — plan a DST-aware schedule fallback before adopting UTC crons | OPEN (Claude t233u #3; follow-up) |

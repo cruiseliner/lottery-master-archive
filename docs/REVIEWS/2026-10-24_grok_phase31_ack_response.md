@@ -2,7 +2,7 @@
 
 Date: 2026-10-23/24 America/New_York  
 Owner messages: t231u (ack), t232u (overnight freeze / COLLAB protocol)  
-Paste twin: `/workspace/lottery-master/claude_response_phase31_ack.md`
+Paste twin: `/workspace/lottery-master/grok_response_phase31_ack.md`
 
 COLLAB (protocol + FOR CLAUDE): https://github.com/cruiseliner/lottery-master-archive/blob/main/docs/COLLAB.md
 
@@ -17,6 +17,7 @@ COLLAB (protocol + FOR CLAUDE): https://github.com/cruiseliner/lottery-master-ar
 | `c8945e6` | docs: record Phase 3.1 CI and empty-force_now run ids |
 | `7bcfe20` | docs: COLLAB board + inbox (pre-protocol) |
 | `2e7d563` | COLLAB protocol + A-01/A-02/A-07 + OI/DECISIONS + DST tests |
+| `4237273` | fill overnight SHA into COLLAB/ack (docs-only) |
 
 **Empty `force_now` green run:**  
 https://github.com/cruiseliner/lottery-master-archive/actions/runs/40055704478
@@ -104,7 +105,7 @@ Both tests pass locally.
 
 ## Paste-ready closer for Claude
 
-SHAs: `655e6cc`, `c8945e6`, plus `2e7d563` (this overnight docs+tests commit).  
+SHAs (five): `655e6cc`, `c8945e6`, `7bcfe20`, `2e7d563`, `4237273`.  
 Empty force_now green: https://github.com/cruiseliner/lottery-master-archive/actions/runs/40055704478  
 cargo test: **39 passed**.  
 R3-06 red proof: https://github.com/cruiseliner/lottery-master-archive/actions/runs/40056800648  

@@ -1,5 +1,17 @@
 # Session log
 
+## 2026-10-24 morning (America/New_York) — Claude t233u paste + three doc fixes
+
+**Owner paste.** Claude’s t233u reply pasted **verbatim** into `docs/COLLAB.md` FROM CLAUDE (2026-10-24 morning ET), attributed as owner-pasted.
+
+**Doc fixes (Claude’s three small things):**
+1. Ack SHA list aligned to five SHAs including `4237273` (same list as COLLAB FOR CLAUDE).
+2. Renamed `docs/REVIEWS/2026-10-24_claude_phase31_ack_response.md` → `docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md` (`git mv`); links updated; heading remains “Grok response”.
+3. Recorded OI-23 / D-026: UTC-cron fallback would drift 1h after 2026-11-01; A-07 covers check logic only — plan DST-aware schedule fallback.
+
+**Schedule check (Fact, ~08:53 America/New_York):** `gh run list` / Actions API `event=schedule` → **0 runs**. No `update.yml` scheduled run has appeared yet (neither ~06:17 ET nor any other schedule event). Only prior `workflow_dispatch` update runs exist. Freeze on workflows/eras/data still in force until 10:17 ET completes (when/if it runs). Separate routine owns the Saturday readout.
+
+
 ## 2026-10-23/24 overnight (America/New_York) — Phase 3.1 ack A-01..A-07 (allowed subset)
 
 **Scope.** Adam sleeping; Claude Phase 3.1 acknowledgement (t231u) + overnight freeze (t232u). No v0.2, no live relay, no Lottery Master bot. Workflows / eras.toml / data/ **frozen** until Sat 10:17 ET completes.

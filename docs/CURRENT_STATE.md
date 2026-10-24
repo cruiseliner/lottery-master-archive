@@ -1,6 +1,6 @@
 # Current state
 
-_Last updated: 2026-10-23 ~23:05 America/New_York (overnight A-01/A-02/A-07; workflows frozen until Sat 10:17 ET)._
+_Last updated: 2026-10-24 ~08:55 America/New_York (Claude t233u paste + grok ack rename; workflows still frozen until 10:17 ET)._
 
 **Version:** 0.1.0 (untagged).
 
@@ -15,7 +15,7 @@ _Last updated: 2026-10-23 ~23:05 America/New_York (overnight A-01/A-02/A-07; wor
 
 **Automation:** unchanged overnight (freeze D-024). `update.yml` still dual cron America/New_York; empty force_now green run 40055704478.
 
-**Collab:** [`docs/COLLAB.md`](COLLAB.md) — protocol + FOR CLAUDE. Ack paste: `docs/REVIEWS/2026-10-24_claude_phase31_ack_response.md`.
+**Collab:** [`docs/COLLAB.md`](COLLAB.md) — protocol + FOR CLAUDE. Ack paste: `docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md`.
 
 **GitHub:** https://github.com/cruiseliner/lottery-master-archive
 

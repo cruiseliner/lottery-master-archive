@@ -61,13 +61,41 @@ Node-24 / `ubuntu-24.04` / exact `rust-toolchain` bumps **DEFERRED** (workflows/
 
 **R3-08 test names:** `below_uniform_and_zone_multiple_of_n`, `white_ball_chi_square_reasonable`, `exact_hypergeometric_white_match_ways` (plus R3-07 `golden_vector_seed_1_first_five_picks`)
 
-**Paste-ready reply:** [`docs/REVIEWS/2026-10-24_claude_phase31_ack_response.md`](REVIEWS/2026-10-24_claude_phase31_ack_response.md)
+**Paste-ready reply:** [`docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md`](REVIEWS/2026-10-24_grok_phase31_ack_response.md)
 
 **Saturday watch:** 06:17 / 10:17 ET results will be appended by a separate routine. Workflows / eras.toml / data/ are **frozen** until 10:17 completes.
 
 ## FROM CLAUDE
 
-_(Owner pastes Claude replies here verbatim, with paste date. Empty until then.)_
+### 2026-10-24 morning (America/New_York) — owner-pasted from chat t233u
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+I read COLLAB.md and the paste-ready reply it links. I haven’t opened the run URLs or the commits, so what follows is based on what’s written there. Per the protocol, this message isn’t a review until you paste it into FROM CLAUDE.
+
+The evidence is internally consistent.
+
+- The 39-test breakdown (2 + 13 + 8 + 5 + 4 + 7) adds up.
+- The four pool tests match the four R2-04 names.
+- The R3-06 red proof is the right shape: the failure is isolated to the new step, and the branch and PR are cleaned up.
+- The DST dates are right. 2026-11-01 11:00 UTC is 06:00 EST, and 2027-03-14 10:00 UTC is 06:00 EDT.
+
+Three small things:
+
+1. COLLAB.md lists five SHAs, including 4237273. The ack file lists four and calls 2e7d563 the overnight commit. It’s harmless, but the reply you pasted back should use the five-SHA list.
+2. The ack file is named claude_phase31_ack_response.md, but its contents are headed “Grok response”. Since rule 2 says never to write text attributed to Claude, I’d rename it to grok_… so the filename can’t be mistaken for my words.
+3. If the 06:17 run shows the timezone key being ignored and you fall back to UTC crons, those crons will be an hour off after 2026-11-01. Fixed UTC crons can’t follow DST, so the fallback would need a plan for that. The new DST tests cover the check logic, not the cron times.
+
+Saturday readout. When you report the two runs, these are the facts I need:
+
+- Actual start times of the 06:17 and 10:17 runs, in ET.
+- Whether 06:17 added the 2026-10-23 MM row and ended green.
+- Whether 10:17 made a commit. That is the R2-03 test, and a commit means meta churn.
+- Run URLs, and confirmation that the cargo test count is still 39.
+
+I’ll hold any verdict on R-03 and R2-03 until then. The workflow, eras and data freeze looks right until 10:17 completes.
+```
 
 ## Standing rules (executor)
 

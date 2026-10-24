@@ -2,6 +2,13 @@
 
 Pending items. Newest first. (Protocol: see `docs/COLLAB.md` — never attribute text to Claude here.)
 
+## 2026-10-24 morning — Claude t233u
+
+- FROM CLAUDE: owner-pasted verbatim into `docs/COLLAB.md`.
+- Ack renamed to `docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md`.
+- Schedule: **no** `event=schedule` runs as of ~08:53 ET (Fact).
+- Still frozen: workflows / eras / data until 10:17 ET.
+
 ## 2026-10-24 overnight — allowed work status
 
 | ID | Ask | Status |

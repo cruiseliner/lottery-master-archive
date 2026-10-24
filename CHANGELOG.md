@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed (2026-10-24 morning — Claude t233u doc fixes)
+- COLLAB: owner-pasted Claude t233u into FROM CLAUDE (verbatim).
+- Renamed ack response to `docs/REVIEWS/2026-10-24_grok_phase31_ack_response.md`; five-SHA list aligned; OI-23/D-026 DST cron-fallback follow-up.
+
 ### Changed (Overnight 2026-10-23/24 — Phase 3.1 ack, allowed subset)
 - docs: COLLAB protocol (owner+Claude); CROSSCHECK_LOG; OI-19..22 + D-023..025; Phase 3.1 ack response.
 - tests: DST due-boundary tests for 2026-11-01 fall-back and 2027-03-14 spring-forward (A-07).

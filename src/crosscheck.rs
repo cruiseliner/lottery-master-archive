@@ -78,7 +78,7 @@ pub fn parse_megamillions_winning_numbers(v: &Value, date: NaiveDate) -> Result<
 }
 
 fn fetch_powerball_numbers(date: NaiveDate) -> Result<[u32; 6]> {
-    let url = powerball_url(date, false, None);
+    let url = powerball_url(date, false, None).expect("national URL");
     let html = payouts::http_get_retry_public(&url, |b| b.contains("white-balls"))?;
     parse_powerball_winning_numbers(&html)
 }

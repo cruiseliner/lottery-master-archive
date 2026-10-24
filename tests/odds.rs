@@ -108,3 +108,26 @@ fn round_half_up() {
     assert_eq!(round_div(4, 2), 2);
     assert_eq!(round_div(7, 3), 2);
 }
+
+#[test]
+fn expected_white_matches_and_variance() {
+    let pb = Matrix::new(5, 69, 26);
+    assert!((pb.expected_white_matches() - 5.0 * 5.0 / 69.0).abs() < 1e-12);
+    let var = pb.variance_white_matches();
+    let k = 5.0_f64;
+    let n = 69.0_f64;
+    let expect = k * (k / n) * (1.0 - k / n) * (n - k) / (n - 1.0);
+    assert!((var - expect).abs() < 1e-12);
+}
+
+#[test]
+fn sum_ways_over_all_white_bonus_equals_total() {
+    // R-15 / R2-09: sum(ways) over all (white, bonus) outcomes == total()
+    for (wmax, bmax) in [(69, 26), (70, 24), (70, 25), (75, 15)] {
+        let m = Matrix::new(5, wmax, bmax);
+        let sum: u128 = (0..=5)
+            .flat_map(|k| [m.ways(k, true), m.ways(k, false)])
+            .sum();
+        assert_eq!(sum, m.total());
+    }
+}

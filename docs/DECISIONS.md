@@ -21,3 +21,8 @@ Status labels: Fact = cited, Inference = reasoned. Approval refs are the owner's
 | D-015 | 2026-10-23 | Historical schedule gaps WARN (`MISSING_DRAW`) + optional `[[game.schedule_exception]]`; due gaps FAIL via staleness | R-04 |
 | D-016 | 2026-10-23 | Official winning-number crosscheck is opt-in (`--crosscheck N`), never on the scheduled path | R-06 / OI-15 |
 | D-017 | 2026-10-23 | Drop README line "Past results do not change future odds" | Owner t225u: that line was ours, not requested. Keep non-affiliation + confirm-with-official. R-14 |
+| D-018 | 2026-10-24 | Remove keep-alive **bot commit**; WARN + step summary only; owner calendar reminder (OI-18). No PAT | Quotes D-013. Claude Phase 3 concern: bot commits do not reliably reset the 60-day public-repo schedule clock and can mask real inactivity. R2-02 |
+| D-019 | 2026-10-24 | Relay system prompt = `agent/REVIEWER_PROMPT.md`; Anthropic over Grok for the independent review relay; relay output is **untrusted** and never auto-applied | D-011 chose Anthropic Messages API (Fact: verified headers/docs 2026-10-23). Inference: separate reviewer model reduces correlated blind spots vs the lead agent. R3-02 |
+| D-020 | 2026-10-24 | `meta.json` schema 2: sha256 per CSV + tool_version; `updated_at` only when rows/last_draw/sha256 change | R2-03; eliminates updated_at-only bot commits that caused run #3 rebase conflict |
+| D-021 | 2026-10-24 | Pool groups = `{pb\|mm}-{white\|bonus}-{max}`; refuse mixed maxima in validate/summary | R2-04; mm-2017/mm-2025 share white-70 |
+| D-022 | 2026-10-24 | 06:17 ET staleness = WARN; 10:17 ET + dispatch = FAIL | R2-05 |

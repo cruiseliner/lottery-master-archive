@@ -19,3 +19,13 @@
 * Per-tier winners and prizes from powerball.com (MUSL) and megamillions.com: cache only
   (`cache/`, gitignored). MUSL and Florida Lottery permission is pending.
 * The owner's personal ticket ledger: never in this repo.
+
+## robots.txt status (R3-05; checked 2026-10-23)
+
+| Host | robots.txt | Status |
+|---|---|---|
+| www.powerball.com | `User-agent: *` / no `Disallow` of draw-result paths (Fact: phase0 notes / live fetch 2026-10-23) | Allowed for polite GET of draw-result pages |
+| www.megamillions.com | `Allow: /` (Fact: phase0 notes) | Allowed for API/HTML used by payouts |
+| data.ny.gov | Socrata open data; no crawl restriction affecting `/resource/*.json` used by `update` | Allowed |
+
+Payout fetches still require MUSL / FL permission before live scheduled use (see OPEN_ISSUES). Delay + per-run request cap + no-retry-on-4xx / Retry-After on 429 are enforced in `src/payouts.rs` (R3-05).

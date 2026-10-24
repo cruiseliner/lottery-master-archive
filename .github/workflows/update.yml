@@ -1,15 +1,9 @@
 # Scheduled data update: NY Open Data winning numbers -> data/<game>/{draws,missing}.csv
 #
-# Timing (see docs/DECISIONS.md D-007, D-012):
-#   Powerball draws Mon/Wed/Sat ~22:59 ET, Mega Millions Tue/Fri ~23:00 ET.
-#   NY Open Data rows were observed to appear ~03:30-03:40 ET the next morning.
-#   Primary run 06:17 America/New_York; retry 10:17 America/New_York (R-11).
-#   timezone key is supported (Fact: docs.github.com workflow-syntax on.schedule, Mar 2026).
-# Staleness: draw D is due at wall-clock 06:00 ET on D+1 (DST-safe; see D-013).
-# Keep-alive: public repos disable schedules after 60 days without repository activity
-#   (Fact: docs.github.com). Whether GITHUB_TOKEN/bot commits count is NOT stated in that
-#   doc (Inference: community practice says they do not). We warn on days since last
-#   non-bot commit and key the keepalive on that age.
+# Timing (see docs/DECISIONS.md D-007, D-012, D-018):
+#   Primary run 06:17 America/New_York (soft staleness WARN); retry 10:17 (hard FAIL).
+#   timezone key is supported (Fact: docs.github.com workflow-syntax on.schedule).
+# Keep-alive: WARN + step summary only; no bot commit (R2-02 / D-018). Quote D-013.
 name: update
 
 on:
@@ -80,6 +74,21 @@ jobs:
           echo "added=$(python3 -c 'import json;print(json.load(open("/tmp/mm.json"))["added"])')" >> "$GITHUB_OUTPUT"
           echo "changed=$(python3 -c 'import json;print(json.load(open("/tmp/mm.json"))["changed"])')" >> "$GITHUB_OUTPUT"
 
+      - name: Warn and upload CHANGES when historical rows changed (R2-08)
+        if: steps.pb.outputs.changed != '0' || steps.mm.outputs.changed != '0'
+        run: |
+          set -euo pipefail
+          echo "::warning::Historical draw row(s) changed (pb changed=${{ steps.pb.outputs.changed }}, mm changed=${{ steps.mm.outputs.changed }}). See data/*/CHANGES.md."
+          ls -la data/*/CHANGES.md || true
+
+      - name: Upload CHANGES artifact (R2-08)
+        if: steps.pb.outputs.changed != '0' || steps.mm.outputs.changed != '0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data-changes
+          path: data/*/CHANGES.md
+          if-no-files-found: warn
+
       - name: Integrity gate (all checks except staleness)
         run: ./target/release/lottotool check --fail-on-error --no-stale
 
@@ -110,18 +119,17 @@ jobs:
             git push
           fi
 
-      - name: Keep-alive and non-bot activity warning
+      - name: Non-bot activity warning (no keep-alive commit; R2-02 / D-018)
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           now=$(date +%s)
           # Official quote (docs.github.com, Disabling and enabling a workflow):
           # "In a public repository, scheduled workflows are automatically disabled when
           #  no repository activity has occurred in 60 days."
           # Whether GITHUB_TOKEN / github-actions[bot] commits count as that activity is
           # NOT stated in the official docs (Inference from community keepalive tooling:
-          # they do not). Warn on days since last non-bot commit.
+          # they do not). See D-013. Claude Phase 3 concern: a bot keep-alive commit does
+          # not reliably reset the 60-day clock and can mask real inactivity.
           nonbot_line=$(git log --format='%ct %an <%ae>' | grep -vE '\[bot\]|github-actions|41898282\+github-actions' | head -1 || true)
           if [ -z "$nonbot_line" ]; then
             nonbot_age=9999
@@ -131,34 +139,36 @@ jobs:
             nonbot_age=$(( (now - nonbot_ts) / 86400 ))
             echo "Last non-bot commit: ${nonbot_line} (${nonbot_age} days ago)"
           fi
-          echo "days_since_nonbot=${nonbot_age}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Non-bot activity"
+            echo "days_since_nonbot=${nonbot_age}"
+            echo
+            echo "No keep-alive bot commit is made (R2-02). Owner calendar reminder: touch the repo before day 60 (see OI-09 / OI-18)."
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ "$nonbot_age" -ge 45 ]; then
-            echo "::warning::Days since last non-bot commit: ${nonbot_age}. Official docs disable schedules after 60 days without repository activity; whether bot commits count is unverified. Owner touch recommended."
-            date -u +%Y-%m-%dT%H:%M:%SZ > docs/.keepalive
-            echo "nonbot_age_days=${nonbot_age}" >> docs/.keepalive
-            git add docs/.keepalive
-            if git diff --cached --quiet; then
-              echo "keepalive unchanged"
-            else
-              git commit -m "chore: keep-alive (last non-bot commit ${nonbot_age} days ago)"
-              git pull --rebase origin main
-              git push
-            fi
+            echo "::warning::Days since last non-bot commit: ${nonbot_age}. Official docs disable schedules after 60 days without repository activity; whether bot commits count is unverified (D-013). Owner touch / calendar reminder required — no bot keep-alive commit (R2-02)."
           fi
 
       - name: Full check incl. staleness (fails visibly if a due draw is absent)
         # R-01: shell: bash => bash -eo pipefail, so a FAIL from check is not hidden by tee.
         # Run even if the prior commit step hit a race (continue-on-error), so force_now
         # red/green proofs are not skipped.
+        # R2-05: 06:17 schedule uses --stale-as-warn; 10:17 and dispatch FAIL on stale.
         if: success() || failure()
         shell: bash
+        env:
+          FORCE_NOW: ${{ inputs.force_now }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
           args=(check --fail-on-error)
-          force_now='${{ inputs.force_now }}'
-          if [ -n "${force_now}" ]; then
-            echo "Using --now ${force_now} (workflow_dispatch force_now)"
-            args+=(--now "${force_now}")
+          if [ -n "${FORCE_NOW}" ]; then
+            echo "Using --now ${FORCE_NOW} (workflow_dispatch force_now)"
+            args+=(--now "${FORCE_NOW}")
+          fi
+          if [ "${SCHEDULE_CRON}" = "17 6 * * *" ]; then
+            echo "06:17 ET schedule: staleness is WARN-only (R2-05)"
+            args+=(--stale-as-warn)
           fi
           ./target/release/lottotool "${args[@]}" | tee check.txt
           ./target/release/lottotool --json "${args[@]}" > check.json || true

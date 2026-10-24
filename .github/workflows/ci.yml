@@ -33,3 +33,24 @@ jobs:
       - run: cargo test --locked
       - name: Committed data passes integrity checks
         run: cargo run --release --locked -- check --fail-on-error --no-stale
+
+      - name: Refuse tracked cache/ or non-header payouts CSVs (R3-06)
+        run: |
+          set -euo pipefail
+          tracked=$(git ls-files cache || true)
+          if [ -n "$tracked" ]; then
+            echo "::error::Tracked files under cache/ (must stay gitignored):"
+            echo "$tracked"
+            exit 1
+          fi
+          bad=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            lines=$(wc -l < "$f")
+            if [ "$lines" -gt 1 ]; then
+              echo "::error::$f has $lines lines (header-only payouts*.csv allowed in-repo; row data belongs in cache/)"
+              bad=1
+            fi
+          done < <(git ls-files '*payouts*.csv' || true)
+          if [ "$bad" -ne 0 ]; then exit 1; fi
+          echo "OK: no tracked cache/; payouts CSVs are header-only or absent"

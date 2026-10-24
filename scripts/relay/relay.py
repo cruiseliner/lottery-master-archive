@@ -9,7 +9,7 @@ Usage:
 Behaviour:
   * Reads ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_VERSION (all required) and optional
     ANTHROPIC_MAX_TOKENS from the environment or scripts/relay/.env (gitignored).
-  * System prompt = agent/AGENT_PROMPT.md; user message = the given files concatenated.
+  * System prompt = agent/REVIEWER_PROMPT.md (R3-02; not AGENT_PROMPT.md); user message = the given files concatenated.
   * POST https://api.anthropic.com/v1/messages with headers x-api-key, anthropic-version,
     content-type (verified against docs.anthropic.com/en/api on 2026-10-23).
   * Writes the text reply to docs/REVIEWS/<UTC timestamp>-review.md and a redacted log line
@@ -38,7 +38,42 @@ _SECRET_PATTERNS = [
     re.compile(r"(gh[opsu]_)[A-Za-z0-9_]+"),
     re.compile(r"(?i)(x-api-key|authorization|api[_-]?key)(\s*[:=]\s*)\S+"),
 ]
-_BLOCKED_PATHS = re.compile(r"(?i)(ledger|tickets?[^/]*\.csv$|(^|/)\.env|private/|cache/)")
+_BLOCKED_PATHS = re.compile(
+    r"(?i)(ledger|tickets?[^/]*\.csv$|(^|/)\.env|private/|cache/|(^|/)\.git(/|$)|secrets?)"
+)
+# Path allowlist for outbound review packages (R3-01). Anything else is refused.
+_ALLOW_PREFIXES = (
+    "docs/",
+    "agent/",
+    "eras.toml",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "src/",
+    "tests/",
+    "scripts/relay/README.md",
+    ".github/workflows/",
+)
+
+
+def _allowed_rel(rel: str) -> bool:
+    if rel.startswith(".git/") or rel == ".git" or "/.git/" in rel:
+        return False
+    return any(rel == p or rel.startswith(p) for p in _ALLOW_PREFIXES)
+
+
+def scan_secrets(text: str, label: str) -> None:
+    """Refuse to send if the outbound payload looks like it contains a secret (R3-01)."""
+    for pat in _SECRET_PATTERNS:
+        if pat.search(text):
+            sys.exit(f"relay: refusing to send {label}: payload matches a secret pattern")
+    # Common PEM / token shapes beyond the named patterns.
+    if re.search(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", text):
+        sys.exit(f"relay: refusing to send {label}: PEM private key detected")
+    if re.search(r"(?i)(aws_secret_access_key|private[_-]?key)\s*[:=]", text):
+        sys.exit(f"relay: refusing to send {label}: credential assignment detected")
 
 
 def redact(text: str) -> str:
@@ -96,13 +131,21 @@ def main(argv: list[str]) -> int:
         if not p.is_relative_to(ROOT):
             sys.exit(f"relay: refusing to send {f} (outside the repo)")
         rel = p.relative_to(ROOT).as_posix()
+        if rel.startswith(".git/") or "/.git/" in f or f.endswith("/.git"):
+            sys.exit(f"relay: refusing to send {rel} (.git blocked; R3-01)")
         if _BLOCKED_PATHS.search(rel):
-            sys.exit(f"relay: refusing to send {rel} (ledger/secret/cache path)")
+            sys.exit(f"relay: refusing to send {rel} (ledger/secret/cache/.git path)")
+        if not _allowed_rel(rel):
+            sys.exit(f"relay: refusing to send {rel} (not on path allowlist; R3-01)")
         if not p.is_file():
             sys.exit(f"relay: no such file {rel}")
-        parts.append(f"===== {rel} =====\n{p.read_text(encoding='utf-8')}")
-    system = (ROOT / "agent" / "AGENT_PROMPT.md").read_text(encoding="utf-8")
+        content = p.read_text(encoding="utf-8")
+        scan_secrets(content, rel)
+        parts.append(f"===== {rel} =====\n{content}")
+    system = (ROOT / "agent" / "REVIEWER_PROMPT.md").read_text(encoding="utf-8")
+    scan_secrets(system, "agent/REVIEWER_PROMPT.md")
     body_text = "\n\n".join(parts)
+    scan_secrets(body_text, "outbound payload")
     model = require("ANTHROPIC_MODEL")
     version = require("ANTHROPIC_VERSION")
     max_tokens = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "8000"))

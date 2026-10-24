@@ -80,3 +80,33 @@ megamillions: fetched 2550 NY rows from https://data.ny.gov/resource/5xaw-6ayf.j
 - Claude paste: `docs/REVIEWS/2026-10-23_claude_phase2_response.md`, `/workspace/lottery-master/claude_response_paste.md`, `/workspace/lottery-master/claude_paste_round2.md`.
 - No v0.2.
 
+## Phase 3.1 — R2 + R3 (2026-10-23 evening → 2026-10-24 early, America/New_York)
+
+**Owner:** t226u / pt226u (R2), t227u (R3 areas 7–8). **No v0.2 / no release tag / no PAT. Relay not run against API.**
+
+### R2-01 — update runs #3 and #4
+
+| Run | Run id | Head | Event | Result |
+|---|---|---|---|---|
+| #1 | 40037509763 | — | — | success (earlier) |
+| #2 | 40053358157 | 6a02b08 | dispatch, force_now=2026-10-23T20:00:00Z | GREEN; staleness PASS |
+| #3 | 40053361988 | 6a02b08 | dispatch, force_now=2026-10-24T12:00:00Z (intended red) | FAILED at "Commit data changes" — rebase CONFLICT on `data/meta.json` because concurrent #2 had pushed 41e1199 (updated_at-only churn). Staleness step skipped. |
+| #4 | 40053755927 | 2fc0810 | dispatch, force_now=2026-10-24T12:00:00Z | Deliberate red proof: FAIL megamillions staleness ("STALE: latest row 2026-10-20, but draw 2026-10-23 was due…"), exit 1. Commit pushed a9caaf7 (meta churn). |
+
+Root cause of #3: R2-03 updated_at churn (fixed this batch). Mitigation already in tree: Commit `continue-on-error` + Full check `if: success() || failure()`.
+
+Empty `force_now` green proof on final code: see run id below after push.
+
+### Code / policy this batch
+
+- R2-02/03/04/05/08/09 FIXED; R2-06 DEFERRED; R2-07 partial (env FORCE_NOW only).
+- R3-01/02/04/05/06/07/08 FIXED; R3-03/09 DEFERRED (OI-22 / OI-19).
+- Local R2-03 proof: second `lottotool update` left `data/meta.json` byte-identical.
+- Docs: `docs/REVIEWS/2026-10-24_claude_phase3.md`, `…_response.md`, `/workspace/lottery-master/claude_response_phase3.md`.
+- D-018..D-022; OI-17 CLOSED; OI-18..OI-22 added.
+
+### Post-push (fill after CI / dispatch)
+
+- Commit: (this Phase 3.1 commit sha)
+- CI run id:
+- Empty force_now update run id:

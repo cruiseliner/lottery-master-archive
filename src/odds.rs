@@ -28,7 +28,8 @@ pub struct Matrix {
     pub bonus_max: u32,
 }
 
-/// The nine prize tiers shared by the current Powerball and Mega Millions prize charts.
+/// The nine prize tiers on the **current** Powerball and Mega Millions prize charts
+/// (current-charts-only; historical matrices may have used different prize structures).
 pub const PRIZE_TIERS: [(u32, bool); 9] = [
     (5, true),
     (5, false),
@@ -87,6 +88,23 @@ impl Matrix {
     pub fn overall_scaled(&self, decimals: u32) -> u128 {
         let w: u128 = self.prize_tiers().iter().map(|t| t.ways).sum();
         round_div(self.total() * 10u128.pow(decimals), w)
+    }
+
+    /// Hypergeometric expected white-ball matches for one ticket vs one draw: `k*k/n` (R-15 / R2-09).
+    pub fn expected_white_matches(&self) -> f64 {
+        let k = self.white_count as f64;
+        let n = self.white_max as f64;
+        k * k / n
+    }
+
+    /// Hypergeometric variance of white-ball matches (R-15 / R2-09).
+    pub fn variance_white_matches(&self) -> f64 {
+        let k = self.white_count as f64;
+        let n = self.white_max as f64;
+        if n <= 1.0 {
+            return 0.0;
+        }
+        k * (k / n) * (1.0 - k / n) * (n - k) / (n - 1.0)
     }
 }
 

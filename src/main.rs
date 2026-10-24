@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use chrono::{DateTime, NaiveDate, Utc};
 use clap::{Parser, Subcommand};
 use lottotool::check::{self, Status};
-use lottotool::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER};
+use lottotool::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER, MissingRow};
 use lottotool::eras::ErasFile;
 use lottotool::odds::{Matrix, PRIZE_TIERS};
 use lottotool::{Game, export, ny, payouts, rng, summary};
@@ -55,6 +55,9 @@ enum Cmd {
         /// Skip the staleness check (integrity-only).
         #[arg(long)]
         no_stale: bool,
+        /// Report staleness as WARN instead of FAIL (06:17 ET soft gate; R2-05).
+        #[arg(long)]
+        stale_as_warn: bool,
         /// Evaluate staleness as of this instant (RFC 3339), default now.
         #[arg(long)]
         now: Option<DateTime<Utc>>,
@@ -80,6 +83,10 @@ enum Cmd {
         /// Era for the frequency table (default: current era).
         #[arg(long)]
         era: Option<String>,
+        /// Pool frequencies across all eras sharing the era's white_group/bonus_group
+        /// (refuses if the pool mixes maxima; R2-04).
+        #[arg(long)]
+        pool: bool,
     },
     /// Export draws as CSV or JSON.
     Export {
@@ -192,11 +199,20 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                 })
                 .collect();
             if !dry_run {
-                data::write_csv(&game.draws_path(&cli.root), &draws, DRAWS_HEADER)?;
-                data::write_csv(&game.missing_path(&cli.root), &missing, MISSING_HEADER)?;
+                let missing_old =
+                    data::read_csv::<MissingRow>(&game.missing_path(&cli.root)).unwrap_or_default();
+                let draws_dirty = added > 0 || changed > 0;
+                let missing_dirty = missing != missing_old;
+                if draws_dirty {
+                    data::write_csv(&game.draws_path(&cli.root), &draws, DRAWS_HEADER)?;
+                }
+                if missing_dirty {
+                    data::write_csv(&game.missing_path(&cli.root), &missing, MISSING_HEADER)?;
+                }
                 if !change_list.is_empty() {
                     write_changes_md(&cli.root, *game, &change_list)?;
                 }
+                // Always invoke: skips the file write when rows/last_draw/sha256 unchanged (R2-03).
                 write_meta_json(&cli.root, &eras)?;
             }
             let first = draws.first().map(|d| d.draw_date.to_string());
@@ -244,6 +260,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             game,
             fail_on_error,
             no_stale,
+            stale_as_warn,
             now,
             crosscheck,
         } => {
@@ -256,6 +273,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                 &games,
                 &check::Options {
                     no_stale: *no_stale,
+                    stale_as_warn: *stale_as_warn,
                     now: *now,
                     crosscheck: *crosscheck,
                 },
@@ -382,10 +400,30 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        Cmd::Summary { game, era } => {
+        Cmd::Summary { game, era, pool } => {
             let g = eras.game(game.id())?;
             let draws = load_draws(cli, *game)?;
-            let s = summary::build(g, &draws, era.as_deref());
+            let mut s = summary::build(g, &draws, era.as_deref());
+            if *pool {
+                let e = era
+                    .as_deref()
+                    .and_then(|id| g.era.iter().find(|x| x.id == id))
+                    .unwrap_or_else(|| g.current_era());
+                let (wf, bf) =
+                    summary::pooled_frequencies(g, &draws, &e.white_group, &e.bonus_group)
+                        .map_err(|m| anyhow::anyhow!(m))?;
+                s.frequency_era = format!("pool white={} bonus={}", e.white_group, e.bonus_group);
+                s.frequency_rows = draws
+                    .iter()
+                    .filter(|d| {
+                        g.era
+                            .iter()
+                            .any(|x| x.id == d.era_id && x.white_group == e.white_group)
+                    })
+                    .count();
+                s.white_freq = wf;
+                s.bonus_freq = bf;
+            }
             if cli.json {
                 println!(
                     "{}",
@@ -516,7 +554,22 @@ fn write_changes_md(
     Ok(())
 }
 
+fn sha256_file(path: &std::path::Path) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(path).ok()?;
+    let mut h = Sha256::new();
+    h.update(&bytes);
+    Some(format!("{:x}", h.finalize()))
+}
+
+/// Write `data/meta.json`. `updated_at` only changes when a game's rows, last_draw,
+/// or CSV sha256 changes (R2-03); otherwise the previous timestamp is kept and, if
+/// nothing else differs, the file is left byte-identical (no-op commit path).
 fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
+    let path = root.join("data").join("meta.json");
+    let old: Option<serde_json::Value> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
     let mut games = serde_json::Map::new();
     for gdef in &eras.game {
         let game = match gdef.id.as_str() {
@@ -534,16 +587,48 @@ fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
                 "ny_dataset": gdef.ny_dataset,
                 "ny_dataset_url": gdef.ny_dataset_url,
                 "current_era": gdef.current_era().id,
+                "draws_csv_sha256": sha256_file(&game.draws_path(root)),
+                "missing_csv_sha256": sha256_file(&game.missing_path(root)),
             }),
         );
     }
+    let games = serde_json::Value::Object(games);
+    let data_changed = match old.as_ref().and_then(|o| o.get("games")) {
+        None => true,
+        Some(og) => {
+            let key =
+                |v: &serde_json::Value, g: &str, k: &str| v.get(g).and_then(|x| x.get(k)).cloned();
+            eras.game.iter().any(|gd| {
+                [
+                    "rows",
+                    "last_draw",
+                    "draws_csv_sha256",
+                    "missing_csv_sha256",
+                ]
+                .iter()
+                .any(|k| key(og, &gd.id, k) != key(&games, &gd.id, k))
+            })
+        }
+    };
+    let updated_at = if data_changed {
+        Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    } else {
+        old.as_ref()
+            .and_then(|o| o.get("updated_at"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+    };
     let meta = json!({
-        "schema_version": 1,
-        "updated_at": Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        "schema_version": 2,
+        "tool_version": env!("CARGO_PKG_VERSION"),
+        "updated_at": updated_at,
         "games": games,
     });
-    let path = root.join("data").join("meta.json");
-    std::fs::write(&path, serde_json::to_string_pretty(&meta)? + "\n")
-        .with_context(|| format!("writing {}", path.display()))?;
+    let body = serde_json::to_string_pretty(&meta)? + "\n";
+    if std::fs::read_to_string(&path).ok().as_deref() == Some(body.as_str()) {
+        return Ok(());
+    }
+    std::fs::write(&path, body).with_context(|| format!("writing {}", path.display()))?;
     Ok(())
 }

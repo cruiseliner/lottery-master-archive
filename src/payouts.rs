@@ -36,8 +36,17 @@ fn parse_usd(s: &str) -> Option<u64> {
 
 // ---------------------------------------------------------------- Powerball (powerball.com)
 
+/// State codes must be exactly two lowercase ASCII letters (R3-04), e.g. `fl`.
+pub fn validate_state(state: &str) -> Result<()> {
+    let ok = state.len() == 2 && state.bytes().all(|b| b.is_ascii_lowercase());
+    if !ok {
+        bail!("state must be two lowercase letters (got {state:?})");
+    }
+    Ok(())
+}
+
 /// `product` = "powerball" or "double-play"; `state` = None (national) or e.g. Some("fl").
-pub fn powerball_url(date: NaiveDate, double_play: bool, state: Option<&str>) -> String {
+pub fn powerball_url(date: NaiveDate, double_play: bool, state: Option<&str>) -> Result<String> {
     let gc = if double_play {
         "pb-double-play"
     } else {
@@ -45,39 +54,106 @@ pub fn powerball_url(date: NaiveDate, double_play: bool, state: Option<&str>) ->
     };
     let mut u = format!("https://www.powerball.com/draw-result?gc={gc}&date={date}");
     if let Some(s) = state {
+        validate_state(s)?;
         u.push_str(&format!("&oc={s}"));
     }
-    u
+    Ok(u)
 }
 
-fn http_get(url: &str) -> Result<String> {
+/// Soft per-process request cap for payout/crosscheck fetches (R3-05).
+const MAX_HTTP_REQUESTS_PER_RUN: u32 = 40;
+static HTTP_REQUESTS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static LAST_HTTP_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+const MIN_HTTP_GAP: std::time::Duration = std::time::Duration::from_millis(750);
+
+fn pace_and_count() -> Result<()> {
+    let n = HTTP_REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    if n > MAX_HTTP_REQUESTS_PER_RUN {
+        bail!("per-run HTTP request cap ({MAX_HTTP_REQUESTS_PER_RUN}) exceeded (R3-05)");
+    }
+    let mut last = LAST_HTTP_AT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(t) = *last {
+        let elapsed = t.elapsed();
+        if elapsed < MIN_HTTP_GAP {
+            std::thread::sleep(MIN_HTTP_GAP - elapsed);
+        }
+    }
+    *last = Some(std::time::Instant::now());
+    Ok(())
+}
+
+enum HttpOutcome {
+    Body(String),
+    /// Non-retryable client error (4xx other than 429).
+    Client(u16, String),
+    /// 429 with optional Retry-After seconds.
+    RateLimited(Option<u64>),
+    Other(anyhow::Error),
+}
+
+fn http_get_once(url: &str) -> HttpOutcome {
     // powerball.com's CDN returns identity, gzip or br bodies seemingly at random (observed
     // 2026-10-23 even for the same URL), so ureq is built with "gzip" and "brotli" decoding.
-    let resp = ureq::get(url)
+    if let Err(e) = pace_and_count() {
+        return HttpOutcome::Other(e);
+    }
+    match ureq::get(url)
         .set("User-Agent", &user_agent())
         .set("Accept-Encoding", "gzip, br")
         .timeout(std::time::Duration::from_secs(60))
         .call()
-        .with_context(|| format!("GET {url}"))?;
-    resp.into_string().context("reading body")
+    {
+        Ok(resp) => match resp.into_string() {
+            Ok(b) => HttpOutcome::Body(b),
+            Err(e) => HttpOutcome::Other(e.into()),
+        },
+        Err(ureq::Error::Status(code, resp)) => {
+            let retry_after = resp
+                .header("retry-after")
+                .and_then(|s| s.parse::<u64>().ok());
+            let body = resp.into_string().unwrap_or_default();
+            if code == 429 {
+                HttpOutcome::RateLimited(retry_after)
+            } else if (400..500).contains(&code) {
+                HttpOutcome::Client(code, body.chars().take(200).collect())
+            } else {
+                HttpOutcome::Other(anyhow!(
+                    "HTTP {code} from {url}: {}",
+                    body.chars().take(200).collect::<String>()
+                ))
+            }
+        }
+        Err(e) => HttpOutcome::Other(e.into()),
+    }
 }
 
 /// GET with up to 3 attempts; `ok` decides whether a body is usable.
+/// Does not retry ordinary 4xx; honors Retry-After on 429 (R3-05).
 pub fn http_get_retry_public(url: &str, ok: impl Fn(&str) -> bool) -> Result<String> {
     http_get_retry(url, ok)
 }
 
-/// GET with up to 3 attempts; `ok` decides whether a body is usable.
 fn http_get_retry(url: &str, ok: impl Fn(&str) -> bool) -> Result<String> {
     let mut last = anyhow::anyhow!("no attempt made");
     for attempt in 1..=3 {
-        match http_get(url) {
-            Ok(b) if ok(&b) => return Ok(b),
-            Ok(b) => last = anyhow::anyhow!("unexpected page ({} bytes) from {url}", b.len()),
-            Err(e) => last = e,
+        match http_get_once(url) {
+            HttpOutcome::Body(b) if ok(&b) => return Ok(b),
+            HttpOutcome::Body(b) => {
+                last = anyhow::anyhow!("unexpected page ({} bytes) from {url}", b.len())
+            }
+            HttpOutcome::Client(code, body) => {
+                bail!("HTTP {code} from {url} (no retry on 4xx; R3-05): {body}");
+            }
+            HttpOutcome::RateLimited(secs) => {
+                let wait = secs.unwrap_or(2 * attempt as u64).min(60);
+                last = anyhow::anyhow!("HTTP 429 from {url}; waited {wait}s (Retry-After)");
+                std::thread::sleep(std::time::Duration::from_secs(wait));
+                continue;
+            }
+            HttpOutcome::Other(e) => last = e,
         }
         if attempt < 3 {
-            std::thread::sleep(std::time::Duration::from_secs(2 * attempt));
+            std::thread::sleep(std::time::Duration::from_secs(2 * attempt as u64));
         }
     }
     Err(last)
@@ -176,7 +252,7 @@ pub fn fetch_powerball(date: NaiveDate, state: Option<&str>) -> Result<Vec<Payou
         if dp && date < NaiveDate::from_ymd_opt(2021, 8, 23).unwrap() {
             continue;
         }
-        let url = powerball_url(date, dp, state);
+        let url = powerball_url(date, dp, state)?;
         let html = http_get_retry(&url, |b| b.contains("winners-table"))?;
         match parse_powerball_html(&html, date, scope, dp, &url, &now_iso()) {
             Ok(mut r) => rows.append(&mut r),

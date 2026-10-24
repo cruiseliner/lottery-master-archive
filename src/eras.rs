@@ -58,10 +58,10 @@ pub struct Era {
     pub price_status: String,
     #[serde(default)]
     pub multiplier: Option<String>,
-    /// Independent pool key for white balls (R-08). Default "white".
+    /// Independent pool key for white balls (R2-04). Prefer `{game}-white-{max}`.
     #[serde(default = "default_white_group")]
     pub white_group: String,
-    /// Independent pool key for the bonus ball (R-08). Default "bonus".
+    /// Independent pool key for the bonus ball (R2-04). Prefer `{game}-bonus-{max}`.
     #[serde(default = "default_bonus_group")]
     pub bonus_group: String,
     pub source: String,
@@ -132,6 +132,12 @@ impl ErasFile {
                     parse_weekday(d)?;
                 }
             }
+            // R2-04: a pool group must never mix differing maxima.
+            for e in &g.era {
+                eras_in_pool(g, &e.white_group, true).map_err(|m| anyhow!("game {}: {m}", g.id))?;
+                eras_in_pool(g, &e.bonus_group, false)
+                    .map_err(|m| anyhow!("game {}: {m}", g.id))?;
+            }
         }
         Ok(())
     }
@@ -194,4 +200,46 @@ impl GameDef {
             .iter()
             .find(|r| r.field == field && r.from <= date && date <= r.to)
     }
+}
+
+/// Derive a pool group id from game, ball kind, and max (R2-04).
+pub fn pool_group_id(game: &str, ball: &str, max: u32) -> String {
+    let short = match game {
+        "powerball" => "pb",
+        "megamillions" => "mm",
+        other => other,
+    };
+    format!("{short}-{ball}-{max}")
+}
+
+/// Eras that share `group` for white or bonus balls. Refuses if maxima differ (R2-04).
+pub fn eras_in_pool<'a>(
+    game: &'a GameDef,
+    group: &str,
+    white: bool,
+) -> Result<Vec<&'a Era>, String> {
+    let mut out = Vec::new();
+    let mut max_seen: Option<u32> = None;
+    for e in &game.era {
+        let (g, mx) = if white {
+            (&e.white_group, e.white_max)
+        } else {
+            (&e.bonus_group, e.bonus_max)
+        };
+        if g != group {
+            continue;
+        }
+        if let Some(m) = max_seen {
+            if m != mx {
+                return Err(format!(
+                    "refuse to pool group {group:?}: era {} has max {mx} but another era in the group has max {m}",
+                    e.id
+                ));
+            }
+        } else {
+            max_seen = Some(mx);
+        }
+        out.push(e);
+    }
+    Ok(out)
 }

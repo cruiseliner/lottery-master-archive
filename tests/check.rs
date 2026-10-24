@@ -81,6 +81,7 @@ fn clean_fixture_passes() {
         &eras(),
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: false,
             now: Some(now),
             crosscheck: None,
@@ -103,6 +104,7 @@ fn out_of_range_and_gap_fail() {
         &eras(),
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: true,
             now: None,
             crosscheck: None,
@@ -126,6 +128,7 @@ fn duplicate_whites_fail() {
         &eras(),
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: true,
             now: None,
             crosscheck: None,
@@ -150,6 +153,7 @@ fn staleness_fails_when_a_due_draw_is_absent() {
         &e,
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: false,
             now: Some(after),
             crosscheck: None,
@@ -172,6 +176,7 @@ fn undocumented_or_stale_missing_csv_fails() {
         &eras(),
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: true,
             now: None,
             crosscheck: None,
@@ -244,6 +249,7 @@ fn non_ascending_whites_fail() {
         &eras(),
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: true,
             now: None,
             crosscheck: None,
@@ -281,6 +287,7 @@ fn schedule_exception_removes_gap() {
         &e,
         &[Game::Megamillions],
         &Options {
+            stale_as_warn: false,
             no_stale: true,
             now: None,
             crosscheck: None,

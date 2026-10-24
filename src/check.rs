@@ -31,6 +31,8 @@ pub struct CheckResult {
 pub struct Options {
     /// Skip the staleness check (used by CI before committing fresh data).
     pub no_stale: bool,
+    /// Report staleness as WARN instead of FAIL (06:17 ET soft gate; R2-05).
+    pub stale_as_warn: bool,
     /// Override "now" (tests / reproducibility).
     pub now: Option<DateTime<Utc>>,
     /// When set, cross-check the N most recent draws per game against official
@@ -153,15 +155,15 @@ pub fn run(root: &Path, eras: &ErasFile, games: &[Game], opts: &Options) -> Vec<
         out.extend(check_whites_ascending(gid, &draws));
         out.extend(check_missing(root, game, g, &draws));
         if opts.no_stale {
-            out.push(r(
-                gid,
-                "staleness",
-                Status::Skip,
-                "--no-stale given (integrity-only run)",
-            ));
+            out.push(r(gid, "staleness", Status::Skip, "--no-stale"));
         } else {
             let now = opts.now.unwrap_or_else(Utc::now);
-            out.push(check_stale(gid, g, &draws, now));
+            let mut st = check_stale(gid, g, &draws, now);
+            if opts.stale_as_warn && st.status == Status::Fail {
+                st.status = Status::Warn;
+                st.detail = format!("(soft/06:17) {}", st.detail);
+            }
+            out.push(st);
         }
         match opts.crosscheck {
             None => out.push(r(

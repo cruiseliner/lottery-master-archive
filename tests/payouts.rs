@@ -17,14 +17,18 @@ fn ticks_match_megamillions_api() {
 
 #[test]
 fn powerball_urls() {
+    assert!(lottotool::payouts::validate_state("fl").is_ok());
+    assert!(lottotool::payouts::validate_state("FL").is_err());
+    assert!(lottotool::payouts::validate_state("florida").is_err());
     assert_eq!(
-        powerball_url(d("2026-10-21"), false, Some("fl")),
+        powerball_url(d("2026-10-21"), false, Some("fl")).unwrap(),
         "https://www.powerball.com/draw-result?gc=powerball&date=2026-10-21&oc=fl"
     );
     assert_eq!(
-        powerball_url(d("2026-10-21"), true, None),
+        powerball_url(d("2026-10-21"), true, None).unwrap(),
         "https://www.powerball.com/draw-result?gc=pb-double-play&date=2026-10-21"
     );
+    assert!(powerball_url(d("2026-10-21"), false, Some("FL")).is_err());
 }
 
 const PB_HTML: &str = r#"

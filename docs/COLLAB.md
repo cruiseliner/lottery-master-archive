@@ -164,6 +164,29 @@ _Inference (Grok, not fact):_ ~3–4h Saturday latency → keep staleness alarm 
 2. Is the external-trigger fallback still needed, given both slots eventually fired?
 3. Sunday 06:17 slot (first PB pickup, Sat 2026-10-24 draw) — still pending watch.
 
+### 2026-10-25 America/New_York — Sunday schedule slots observed (PB pickup + second R2-03)
+
+**Fact — both Sunday slots fired** (`event=schedule`), late ~3–4h again. Absolute UTC times + cron strings recorded so timezone-key vs UTC-cron can be judged (nominal ET slot × America/New_York vs ignored-key UTC).
+
+**Fact — Run 3 (06:17 ET slot / cron `17 6 * * *`):** [`40201891314`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40201891314) — `SCHEDULE_CRON` = `17 6 * * *`, `created_at`/`run_started_at` **2026-10-25T14:22:01Z** (10:22:01 ET), green, committed [`b13e951`](https://github.com/cruiseliner/lottery-master-archive/commit/b13e95184c2e25fd48d6d52264d869c5d6d08c53) (`data: NY Open Data update 2026-10-25T14:22Z (pb +1/~0, mm +0/~0)`). Delay sample 3: **4h05m** late vs 06:17 ET.
+
+**Fact — Run 4 (10:17 ET slot / cron `17 10 * * *`):** [`40217472730`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40217472730) — `SCHEDULE_CRON` = `17 10 * * *`, `created_at`/`run_started_at` **2026-10-25T17:38:56Z** (13:38:56 ET), finished ~17:39:26Z, conclusion `success`. Tip stayed `b13e951`; no new commit (second clean R2-03 no-new-draw sample).
+
+**Fact — Q3 watch closed by observation:** Sunday 06:17 slot did fire (late) and picked up Sat 2026-10-24 Powerball.
+
+**Fact — local gate after Run 3 tip:** `lottotool check --fail-on-error` → **26 pass / 0 warn / 0 fail / 4 skip** (continuity + staleness PASS; PB last_draw 2026-10-24, MM 2026-10-23).
+
+**Delay log (append):**
+
+| # | Day | Slot (ET) | Actual start (ET) | Late by | Cron | Run | Outcome |
+|---|-----|-----------|-------------------|---------|------|-----|---------|
+| 3 | Sun 10-25 | 06:17 | 10:22:01 | 4h05m | `17 6 * * *` | [40201891314](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40201891314) | PB +1 → `b13e951` |
+| 4 | Sun 10-25 | 10:17 | 13:38:56 | 3h21m | `17 10 * * *` | [40217472730](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40217472730) | no commit (R2-03 clean) |
+
+**Note:** Run start ≠ NY posting time. Separating scheduler delay from NY lag needs each dataset’s Socrata `rowsUpdatedAt` (see FROM CLAUDE C-01).
+
+**Open (waiting on Claude at time of this FOR CLAUDE write):** post-freeze order (R2-03 / heartbeat / in-repo delay log); external-trigger fallback still needed?
+
 ## FROM CLAUDE
 
 ### 2026-10-24 morning (America/New_York) — owner-pasted from chat t233u
@@ -264,6 +287,27 @@ Brief for Grok, read-only until the 10:17 run completes. The audit report goes o
 After 10:17 is done and the R2-03 readout is closed, any fills should go in through the normal ingest path on a branch. Then run cargo test --locked, check, and the crosscheck, and put the provenance in the commit message. I’d also add a permanent continuity check to check that flags any expected draw date missing from the archive, so gaps can’t go unnoticed again.
 
 If you paste links to eras.toml and the data files, or Grok’s audit output, I’ll review it. The links need to appear in your message for me to open them.
+```
+
+### 2026-10-25 (America/New_York) — owner-pasted FROM CLAUDE (provisional on paraphrase)
+
+_The following block is Claude’s reply, pasted by the owner verbatim. Marked PROVISIONAL by Claude until original three questions were confirmed against COLLAB._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-25). PROVISIONAL: based on Grok's paraphrase of the three questions, not the original text.
+
+C-01 Sunday runs: accepted. For every scheduled run, record in the run summary: github.event.schedule (the cron string), run created_at and run_started_at in UTC, and each NY dataset's rowsUpdatedAt from the Socrata views API. That separates scheduler delay from NY posting delay, and the first two together settle whether the schedule timezone key works.
+
+C-02 Ordering: R2-03 comes first and stays an invariant: a no-op run never commits.
+  - Heartbeat: run summary and artifact only. Never committed.
+  - Delay log: in-repo only as rows appended in the same commit as a new draw (for example data/ingest_log.csv: game, draw_date, ny_rows_updated_at, run_started_at, schedule_slot). Nothing new means no commit.
+  - Record NY posting times in OI-10 from rowsUpdatedAt, not from run times.
+
+C-03 External-trigger fallback: not needed now. update is idempotent, staleness is measured against the draw calendar, and 3-4 hours of lateness doesn't matter when the data is needed before a draw that is at least a day away. An external trigger needs a token, which breaks the no-PAT rule, and it widens the attack surface. Manual workflow_dispatch from the owner's machine remains the fallback. Revisit if scheduled runs are skipped entirely, or the latest due draw is missing after 18:00 ET on more than 2 draw days in 30 days.
+
+C-04 Freeze: lifted for run-summary and ingest_log additions only. Acceptance test: a no-op run produces no commit. Still frozen: cron and timezone settings, eras.toml, manual edits to data/.
+
+C-05 Still open from before: A-01 (SHAs, green run URL, test count), A-02, A-03, A-06, A-07.
 ```
 
 ## Standing rules (executor)

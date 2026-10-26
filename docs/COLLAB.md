@@ -381,6 +381,29 @@ One item for you: the 26 Oct Powerball jackpot (about $687M annuity, per the Hoo
 - https://github.com/cruiseliner/lottery-master-archive/blob/main/.github/workflows/update.yml
 - https://github.com/cruiseliner/lottery-master-archive/commit/01958780e595b9658ade94c529d7e89b80d597a5
 
+### 2026-10-26 (America/New_York) — owner-pasted FROM CLAUDE C-11..C-13
+
+_The following block is Claude’s reply, pasted by the owner verbatim._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-26)
+
+C-11 Sequencing confirmed: hold R4-02, R4-03 and A-03 until Tuesday's new-draw run and Wednesday's Mega Millions pickup are green. The Tuesday checklist stands unchanged. R5-01 is resolved.
+
+C-12 Private pick ledger (informal testrun is fine):
+  a) Do not keep it under cache/. Use a separate gitignored ledger/ path, plus a private backup. It is the one file that cannot be regenerated.
+  b) Append-only, with created_at (UTC) written before the 10:00 PM ET sales cutoff. Never edit a row after the draw; add result rows separately.
+  c) Each row: game, draw_date, numbers, model label, seed, cost, created_at.
+  d) Label the testrun "informal: excluded from scorecards". It has no RANDOM/SPLIT-ONLY controls and no OI-19 derived seeds yet, so it cannot support model claims until v0.3.
+  e) Never paste picks into COLLAB.md, commit messages or run summaries.
+
+C-13 Still open (minor): R5-02 field-format checks for ingest_log rows, and R5-03 (the blob link for src/ingest_log.rs at 26fdde6). Neither blocks Tuesday.
+
+I couldn’t see cache/picks/ and wouldn’t expect to, since it’s private.
+
+For Tuesday, what I’d like from you is the new-draw commit link and the run summary, and I’ll check both against the acceptance list.
+```
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.
@@ -449,4 +472,16 @@ One item for you: the 26 Oct Powerball jackpot (about $687M annuity, per the Hoo
 **Fact — owner product direction (non-archive):** after the pipeline is solid, Lottery Master’s main job is pre-draw ticket recommendations for purchase, plus a private hit/miss ledger to refine picks. A private gitignored `cache/picks/` ledger was started for a testrun (numbers not committed to the public repo). No change to public `data/` policy.
 
 **Open questions for Claude:** none new on R4-01. Confirm whether the morning status + held R4-02/R4-03 sequencing still looks right before tonight’s PB. Full file links remain in the R4 review paste above.
+
+### 2026-10-26 ~07:11 America/New_York — C-11/C-12 ack (no pick numbers)
+
+**Fact — C-11:** sequencing hold confirmed locally; no workflow / A-03 work started.
+
+**Fact — C-12:** private pick ledger moved off disposable `cache/` onto gitignored `ledger/` (D-030). Informal testrun labeled `informal: excluded from scorecards`. Private backups written outside the working tree (bot store + `/home/box/lottery-master-ledger-backup/`). Pick values are **not** pasted here (C-12/e).
+
+**Fact — R5-03 blob link** (`src/ingest_log.rs` at R4-01 fix): https://github.com/cruiseliner/lottery-master-archive/blob/26fdde6093a5c078515b2a4aa96c26f92e3d6da0/src/ingest_log.rs
+
+**Open (minor, non-blocking):** R5-02 ingest_log field-format checks — deferred until after Tuesday acceptance.
+
+**For Claude Tuesday:** will send the new-draw commit URL + run summary for the acceptance checklist.
 

@@ -346,6 +346,41 @@ C-10 Still deferred: R2-06 trigger "before v0.2 grade ships"; R3-03 relay condit
 If the C-01/C-02 change lands before tonight’s draw, the Tuesday-morning pickup will be its first real test. I’d rather it be done correctly than done before tonight.
 ```
 
+### 2026-10-26 (America/New_York) — owner-pasted FROM CLAUDE R4 review of 0195878
+
+_The following block is Claude’s review, pasted by the owner verbatim._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-26). REVIEW OF 0195878 (C-01/C-02). Partial: the diff view truncated before main.rs, ny.rs, tests/check.rs.
+
+R4-01 [MAJOR, Fact from code] src/ingest_log.rs: `data::read_csv(&p).unwrap_or_default()`. If the existing ingest_log.csv is corrupt or unparseable (a bad merge, a header change), it is treated as empty and then rewritten with only the new rows, silently destroying the history. Fix: propagate the error and fail the update. Add a test with a corrupt file. Also extend `check`: ingest_log.csv parses, header matches, (game, draw_date) is unique, every row references an existing draw, and every draw dated after the feature went live (PB after 2026-10-24, MM after 2026-10-23) has a log row. That makes a half-written update fail the integrity gate.
+
+R4-02 [MINOR] update.yml fetch_views: `${epoch}` from a network response is interpolated into a Python program string (int('${epoch}')). Parse the JSON and convert in one Python process without interpolation, and require a numeric value. Never splice network data into code, even from a trusted host.
+
+R4-03 [MINOR, unverified] The shell computes rows_pb/rows_mm for the summary, while the commit message says the tool records views failures itself, so the summary and the log may come from two separate fetches. Have the tool print the exact values it logs, or pass them in, so the summary shows what was recorded.
+
+R4-04 [INFO] When `gh api` fails, run_started_at falls back to the runner clock with only a ::warning::. Acceptable, but the log rows won't show which rows used the fallback.
+
+R4-05 [SEQUENCING] Do not start the A-03 bumps yet. Tuesday's scheduled run is the real acceptance test for the ingest path, so hold any workflow change until it and Wednesday's Mega Millions pickup are green. Then do A-03 as its own commit with a green dispatch (C-09).
+
+TUESDAY ACCEPTANCE (first real new-draw run, after tonight's 2026-10-26 Powerball draw):
+  - exactly one data commit, touching draws.csv, meta.json and ingest_log.csv, and nothing else unexpected (missing.csv only if it genuinely changed);
+  - ingest_log row: ny_rows_updated_at plausibly early morning ET Tuesday (about 07:30Z by earlier observation), schedule_slot = "17 6 * * *" or "17 10 * * *", NOT "manual" or "local";
+  - run summary shows the same rowsUpdatedAt;
+  - `check --fail-on-error` green;
+  - the following no-op run leaves meta.json and ingest_log.csv byte-identical.
+
+One item for you: the 26 Oct Powerball jackpot (about $687M annuity, per the Hoosier Lottery page) makes tonight’s draw a good first real test. I’d keep the workflow untouched until Tuesday’s run.
+```
+
+**Links for Claude (full files; prior diff truncated):**
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/src/main.rs
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/src/ny.rs
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/src/ingest_log.rs
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/tests/check.rs
+- https://github.com/cruiseliner/lottery-master-archive/blob/main/.github/workflows/update.yml
+- https://github.com/cruiseliner/lottery-master-archive/commit/01958780e595b9658ade94c529d7e89b80d597a5
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.

@@ -58,6 +58,70 @@ jobs:
       - name: Build
         run: cargo build --release --locked
 
+      - name: Run diagnostics summary (C-01 / D-028)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          # Run created_at / run_started_at from the Actions API (UTC).
+          created_at=""
+          run_started_at=""
+          if run_json=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}" 2>/dev/null); then
+            created_at=$(printf '%s' "$run_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("created_at") or "")')
+            run_started_at=$(printf '%s' "$run_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("run_started_at") or "")')
+          else
+            echo "::warning::Could not fetch run timestamps via gh api; using runner clock for run_started_at"
+            run_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          fi
+          if [ -z "$run_started_at" ]; then
+            run_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          fi
+          # schedule_slot: cron string for scheduled runs; "manual" for workflow_dispatch.
+          if [ -n "${SCHEDULE_CRON}" ]; then
+            schedule_slot="${SCHEDULE_CRON}"
+          else
+            schedule_slot="manual"
+          fi
+          echo "LOTTOTOOL_RUN_STARTED_AT=${run_started_at}" >> "$GITHUB_ENV"
+          echo "LOTTOTOOL_SCHEDULE_SLOT=${schedule_slot}" >> "$GITHUB_ENV"
+
+          # Socrata views rowsUpdatedAt (dataset-level upper bound on posting). Never fail.
+          rows_pb=""
+          rows_mm=""
+          fetch_views() {
+            local id="$1"
+            local epoch
+            epoch=$(curl -fsS -A "lottotool-ci (+https://github.com/cruiseliner/lottery-master-archive)" \
+              "https://data.ny.gov/api/views/${id}.json" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("rowsUpdatedAt") or "")' \
+              ) || true
+            if [ -z "${epoch}" ]; then
+              echo "::warning::Socrata views rowsUpdatedAt unavailable for ${id} (diagnostic only)"
+              echo ""
+              return 0
+            fi
+            python3 -c "from datetime import datetime, timezone; print(datetime.fromtimestamp(int('${epoch}'), tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))"
+          }
+          rows_pb=$(fetch_views d6yy-54nr) || rows_pb=""
+          rows_mm=$(fetch_views 5xaw-6ayf) || rows_mm=""
+
+          {
+            echo "## Update run diagnostics (C-01)"
+            echo
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| github.event.schedule | \`${SCHEDULE_CRON:-}\` |"
+            echo "| schedule_slot | \`${schedule_slot}\` |"
+            echo "| run created_at (UTC) | \`${created_at}\` |"
+            echo "| run run_started_at (UTC) | \`${run_started_at}\` |"
+            echo "| PB rowsUpdatedAt (upper bound) | \`${rows_pb}\` |"
+            echo "| MM rowsUpdatedAt (upper bound) | \`${rows_mm}\` |"
+            echo
+            echo "rowsUpdatedAt is dataset-level from the Socrata views API (upper bound on posting time)."
+            echo "ingest_log.csv rows are appended only when a new draw lands (same commit as draws)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Update Powerball
         id: pb
         run: |

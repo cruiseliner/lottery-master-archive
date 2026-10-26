@@ -42,9 +42,23 @@ An empty cell means null, and every null run must be listed in `missing.csv`.
 | source_url, fetched_at | provenance (UTC RFC 3339) |
 
 
+
+## ingest_log.csv (`data/ingest_log.csv`)
+
+Appended by `lottotool update` only when a new draw date is added (D-028 / C-08). Not
+backfilled. Idempotent on `(game, draw_date)`.
+
+| Column | Notes |
+|---|---|
+| game | `powerball` / `megamillions` |
+| draw_date | newly added draw date |
+| ny_rows_updated_at | Socrata views API `rowsUpdatedAt` for that game's dataset (UTC RFC 3339); **dataset-level upper bound** on posting time; empty if the views call failed (WARN only) |
+| run_started_at | UTC RFC 3339 of the update run start |
+| schedule_slot | cron string for scheduled runs; `manual` for `workflow_dispatch`; `local` for CLI without env |
+
 ## meta.json (`data/meta.json`)
 
-Written by `lottotool update`. Fields: `schema_version`, `updated_at` (UTC RFC 3339), `games.<id>.{rows,first_draw,last_draw,ny_dataset,ny_dataset_url,current_era}`.
+Written by `lottotool update`. Fields: `schema_version`, `tool_version`, `updated_at` (UTC RFC 3339), `ingest_log_csv_sha256`, `games.<id>.{rows,first_draw,last_draw,ny_dataset,ny_dataset_url,current_era,draws_csv_sha256,missing_csv_sha256}`. `updated_at` and the file bytes change only when game row/sha fields or `ingest_log_csv_sha256` change (R2-03).
 
 ## CHANGES.md (`data/<game>/CHANGES.md`)
 

@@ -307,6 +307,7 @@ fn schema_files_match_code() {
         ("schemas/draws.csv", DRAWS_HEADER),
         ("schemas/missing.csv", MISSING_HEADER),
         ("schemas/payouts.csv", data::PAYOUTS_HEADER),
+        ("schemas/ingest_log.csv", data::INGEST_LOG_HEADER),
     ] {
         let s = std::fs::read_to_string(root.join(f)).unwrap();
         assert_eq!(s.trim_end(), h, "{f}");

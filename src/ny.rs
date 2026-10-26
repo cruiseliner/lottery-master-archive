@@ -3,7 +3,7 @@ use crate::Game;
 use crate::data::{Draw, MissingRow};
 use crate::eras::GameDef;
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use serde_json::Value;
 
 pub fn user_agent() -> String {
@@ -30,6 +30,44 @@ pub fn fetch_rows(g: &GameDef) -> Result<Vec<Value>> {
             truncate(&other.to_string(), 300)
         ),
     }
+}
+
+/// Fetch dataset-level `rowsUpdatedAt` from the Socrata views API.
+/// Returns `None` on any failure and emits a WARN (never fails the update; C-08 a).
+/// The timestamp is an **upper bound** on when the draw was posted (dataset-level).
+pub fn fetch_view_rows_updated_at(dataset_id: &str) -> Option<DateTime<Utc>> {
+    match fetch_view_rows_updated_at_inner(dataset_id) {
+        Ok(dt) => Some(dt),
+        Err(e) => {
+            let msg = format!(
+                "Socrata views rowsUpdatedAt unavailable for {dataset_id}: {e:#} (diagnostic only; continuing)"
+            );
+            if std::env::var_os("GITHUB_ACTIONS").is_some() {
+                println!("::warning::{msg}");
+            } else {
+                eprintln!("warning: {msg}");
+            }
+            None
+        }
+    }
+}
+
+fn fetch_view_rows_updated_at_inner(dataset_id: &str) -> Result<DateTime<Utc>> {
+    let url = format!("https://data.ny.gov/api/views/{dataset_id}.json");
+    let resp = ureq::get(&url)
+        .set("Accept", "application/json")
+        .set("User-Agent", &user_agent())
+        .timeout(std::time::Duration::from_secs(30))
+        .call()
+        .with_context(|| format!("GET {url}"))?;
+    let v: Value = resp.into_json().context("decoding views JSON")?;
+    let epoch = v
+        .get("rowsUpdatedAt")
+        .and_then(|x| x.as_i64().or_else(|| x.as_u64().map(|u| u as i64)))
+        .ok_or_else(|| anyhow!("views JSON missing integer rowsUpdatedAt"))?;
+    Utc.timestamp_opt(epoch, 0)
+        .single()
+        .ok_or_else(|| anyhow!("rowsUpdatedAt epoch {epoch} out of range"))
 }
 
 fn truncate(s: &str, n: usize) -> String {

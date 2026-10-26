@@ -5,7 +5,7 @@ use lottotool::check::{self, Status};
 use lottotool::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER, MissingRow};
 use lottotool::eras::ErasFile;
 use lottotool::odds::{Matrix, PRIZE_TIERS};
-use lottotool::{Game, export, ny, payouts, rng, summary};
+use lottotool::{Game, export, ingest_log, ny, payouts, rng, summary};
 use serde_json::json;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -211,6 +211,33 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                 }
                 if !change_list.is_empty() {
                     write_changes_md(&cli.root, *game, &change_list)?;
+                }
+                // C-08 / D-028: append ingest_log only for newly added draw dates.
+                if added > 0 {
+                    let new_dates: Vec<NaiveDate> = draws
+                        .iter()
+                        .filter(|d| !old.iter().any(|o| o.draw_date == d.draw_date))
+                        .map(|d| d.draw_date)
+                        .collect();
+                    let ny_at = ny::fetch_view_rows_updated_at(&g.ny_dataset)
+                        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+                    let run_started =
+                        std::env::var("LOTTOTOOL_RUN_STARTED_AT").unwrap_or_else(|_| {
+                            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+                        });
+                    let schedule_slot = std::env::var("LOTTOTOOL_SCHEDULE_SLOT")
+                        .unwrap_or_else(|_| "local".to_string());
+                    let n = ingest_log::append_for_new_draws(
+                        &cli.root,
+                        game.id(),
+                        &new_dates,
+                        ny_at.as_deref(),
+                        &run_started,
+                        &schedule_slot,
+                    )?;
+                    if n > 0 && !cli.json {
+                        println!("  ingest_log: appended {n} row(s)");
+                    }
                 }
                 // Always invoke: skips the file write when rows/last_draw/sha256 unchanged (R2-03).
                 write_meta_json(&cli.root, &eras)?;
@@ -563,8 +590,9 @@ fn sha256_file(path: &std::path::Path) -> Option<String> {
 }
 
 /// Write `data/meta.json`. `updated_at` only changes when a game's rows, last_draw,
-/// or CSV sha256 changes (R2-03); otherwise the previous timestamp is kept and, if
-/// nothing else differs, the file is left byte-identical (no-op commit path).
+/// CSV sha256, or top-level `ingest_log_csv_sha256` changes (R2-03 / D-028); otherwise
+/// the previous timestamp is kept and, if nothing else differs, the file is left
+/// byte-identical (no-op commit path).
 fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
     let path = root.join("data").join("meta.json");
     let old: Option<serde_json::Value> = std::fs::read_to_string(&path)
@@ -593,7 +621,8 @@ fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
         );
     }
     let games = serde_json::Value::Object(games);
-    let data_changed = match old.as_ref().and_then(|o| o.get("games")) {
+    let ingest_log_csv_sha256 = sha256_file(&ingest_log::path(root));
+    let games_changed = match old.as_ref().and_then(|o| o.get("games")) {
         None => true,
         Some(og) => {
             let key =
@@ -610,6 +639,12 @@ fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
             })
         }
     };
+    let ingest_changed = old
+        .as_ref()
+        .and_then(|o| o.get("ingest_log_csv_sha256"))
+        .cloned()
+        != ingest_log_csv_sha256.as_ref().map(|s| json!(s));
+    let data_changed = games_changed || ingest_changed || old.is_none();
     let updated_at = if data_changed {
         Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
     } else {
@@ -623,6 +658,7 @@ fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
         "schema_version": 2,
         "tool_version": env!("CARGO_PKG_VERSION"),
         "updated_at": updated_at,
+        "ingest_log_csv_sha256": ingest_log_csv_sha256,
         "games": games,
     });
     let body = serde_json::to_string_pretty(&meta)? + "\n";

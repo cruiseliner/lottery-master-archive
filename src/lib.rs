@@ -8,6 +8,7 @@ pub mod crosscheck;
 pub mod data;
 pub mod eras;
 pub mod export;
+pub mod ingest_log;
 pub mod ny;
 pub mod odds;
 pub mod payouts;

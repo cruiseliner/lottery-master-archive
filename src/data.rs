@@ -7,6 +7,8 @@ use std::path::Path;
 pub const DRAWS_HEADER: &str = "draw_date,era_id,w1,w2,w3,w4,w5,bonus,multiplier,dp_w1,dp_w2,dp_w3,dp_w4,dp_w5,dp_bonus,source";
 pub const MISSING_HEADER: &str = "game,field,first_draw,last_draw,rows,status,reason,source";
 pub const PAYOUTS_HEADER: &str = "game,draw_date,scope,product,tier,white_matched,bonus_matched,winners,prize_usd,prize_text,source_url,fetched_at";
+pub const INGEST_LOG_HEADER: &str =
+    "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot";
 
 /// One draw row of `data/<game>/draws.csv`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -71,6 +73,17 @@ pub struct MissingRow {
     pub status: String,
     pub reason: String,
     pub source: String,
+}
+
+/// One row of `data/ingest_log.csv` (D-028 / C-08).
+/// `ny_rows_updated_at` is dataset-level Socrata views upper bound; empty if fetch failed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct IngestLogRow {
+    pub game: String,
+    pub draw_date: NaiveDate,
+    pub ny_rows_updated_at: String,
+    pub run_started_at: String,
+    pub schedule_slot: String,
 }
 
 /// One per-tier payout row (cache/ only; see schemas/payouts.csv).

@@ -21,6 +21,7 @@
       "rows": 2016
     }
   },
+  "ingest_log_csv_sha256": "9790c5ec452b50a440b00c839bf7d7cf33bc35a08f23840565b4df1ed9d8b0ac",
   "schema_version": 2,
   "tool_version": "0.1.0",
   "updated_at": "2026-10-25T14:22:22Z"

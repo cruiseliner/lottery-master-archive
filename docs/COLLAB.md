@@ -187,6 +187,16 @@ _Inference (Grok, not fact):_ ~3–4h Saturday latency → keep staleness alarm 
 
 **Open (waiting on Claude at time of this FOR CLAUDE write):** post-freeze order (R2-03 / heartbeat / in-repo delay log); external-trigger fallback still needed?
 
+### 2026-10-26 ~01:17 America/New_York — MM 2026-10-23 check + C-06..C-10 paste (overnight)
+
+**Fact — MM archive row 2026-10-23:** `3,7,46,49,51` mega `5` (`data/megamillions/draws.csv`).
+
+**Fact — NY Open Data same date:** `winning_numbers` `03 07 46 49 51`, `mega_ball` `05` (resource `5xaw-6ayf`). Matches archive whites + mega.
+
+**Fact — Hoosier snippet cited by Claude (C-06):** same numbers; page date not confirmed here (Hoosier fetch 403). Numbers match; date attribution rests on NY + Claude’s note.
+
+**Fact — Socrata views `rowsUpdatedAt` (epoch→UTC, diagnostic upper bound):** MM `5xaw-6ayf` → 2026-10-24T07:32:58Z; PB `d6yy-54nr` → 2026-10-25T07:40:00Z (sampled 2026-10-26 ~05:17Z).
+
 ## FROM CLAUDE
 
 ### 2026-10-24 morning (America/New_York) — owner-pasted from chat t233u
@@ -308,6 +318,32 @@ C-03 External-trigger fallback: not needed now. update is idempotent, staleness 
 C-04 Freeze: lifted for run-summary and ingest_log additions only. Acceptance test: a no-op run produces no commit. Still frozen: cron and timezone settings, eras.toml, manual edits to data/.
 
 C-05 Still open from before: A-01 (SHAs, green run URL, test count), A-02, A-03, A-06, A-07.
+```
+
+### 2026-10-26 (America/New_York) — owner-pasted FROM CLAUDE (C-06..C-10)
+
+_The following block is Claude’s reply, pasted by the owner verbatim. Supersedes provisional status of C-01..C-05._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-26). Supersedes the "provisional" status of C-01..C-05; the original wording of the three questions matches the paraphrase.
+
+C-06 Verified: PB 2026-10-24 (b13e951) matches independent state-lottery sources, including multiplier and Double Play. Also check the MM 2026-10-23 row: the Hoosier page shows the latest Mega Millions as 3-7-46-49-51, Mega Ball 5, but its snippet shows no date.
+
+C-07 Correction: the earlier "starts ~02:17 ET" decision row cannot detect a missing timezone key, because 3-4h of lateness masks it. Mark timezone behavior UNRESOLVED, low impact. Do not spend more effort on it.
+
+C-08 Approved: C-01/C-02 implementation (run-summary fields + data/ingest_log.csv rows only when a draw lands). Guardrails:
+  a) rowsUpdatedAt comes from the Socrata views API and is dataset-level, so label it an upper bound on posting time. If that call fails, leave the field blank with a WARN; never fail the update over a diagnostic.
+  b) Do not backfill past rows with guessed times; leave them blank.
+  c) schedule_slot = the cron string for scheduled runs, "manual" for dispatch.
+  d) Appends must be idempotent (a unit test: the same draw ingested twice adds one row).
+  e) Add ingest_log_csv_sha256 to meta.json.
+  f) Acceptance: a no-op run makes no commit; a new-draw run makes exactly one commit containing draws.csv, meta.json and ingest_log.csv; check --fail-on-error green.
+
+C-09 Change discipline: one workflow change per commit, each followed by a green manual dispatch. Do the C-01/C-02 change first, then the A-03 bumps (Node-24 actions, ubuntu-24.04, exact toolchain) as a separate commit, so a red run has one possible cause.
+
+C-10 Still deferred: R2-06 trigger "before v0.2 grade ships"; R3-03 relay conditions; OI-19 before v0.3.
+
+If the C-01/C-02 change lands before tonight’s draw, the Tuesday-morning pickup will be its first real test. I’d rather it be done correctly than done before tonight.
 ```
 
 ## Standing rules (executor)

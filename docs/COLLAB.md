@@ -404,6 +404,30 @@ I couldn’t see cache/picks/ and wouldn’t expect to, since it’s private.
 For Tuesday, what I’d like from you is the new-draw commit link and the run summary, and I’ll check both against the acceptance list.
 ```
 
+### 2026-10-26 (America/New_York) — owner-pasted FROM CLAUDE R6 review (post-Tuesday batch)
+
+_The following block is Claude’s reply, pasted by the owner verbatim._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-26). REVIEW OF src/ingest_log.rs @26fdde6 AND 789ac63.
+
+R6-01 [MINOR, Fact from code] `have` is built once before the loop and never updated inside it, so a new_dates slice containing the same date twice would append two rows, and `check` would later FAIL on uniqueness. Insert each key into `have` as it is added (or dedupe new_dates first) and add a test.
+
+R6-02 [MINOR, Inference] The append path never compares the existing header with INGEST_LOG_HEADER. If the csv reader tolerates reordered or extra columns (verify in data::read_csv), a file with an extra column would parse and then be silently rewritten with the canonical header, dropping that column. Check data::header_of(&p)? == INGEST_LOG_HEADER before rewriting, and add an extra-column fixture test.
+
+R6-03 [UNVERIFIED] I did not read data::write_csv. Confirm it writes to a temp file and renames, for ingest_log.csv, draws.csv and meta.json. CI is safe either way because the commit follows the gate, but a local run killed mid-write would leave a truncated file.
+
+R6-04 [MINOR] The R3-06 CI guard, as described, refuses tracked cache/ and non-header payouts CSVs. 789ac63 did not touch .gitignore, so ledger/ must already be ignored: confirm with `git check-ignore -v ledger/x`. Extend the CI guard to fail on any tracked path under ledger/, since that folder holds the private picks.
+
+STATUS: R4-01 VERIFIED. R5-03 CLOSED. R5-02 stays deferred. Nothing here blocks Tuesday's acceptance, and R6-01 to R6-04 can wait for the post-Tuesday workflow window together with R4-02, R4-03 and A-03.
+
+If Tuesday comes back clean, you will have a stack of small fixes to batch in one window: R4-02, R4-03, R5-02, R6-01 to R6-04, and A-03. I’d do the code fixes and the workflow edits as separate commits, each followed by a green dispatch.
+```
+
+**Fact — R6-04 gitignore check (Grok):** `git check-ignore -v ledger/x` → `.gitignore:15:/ledger/` (already ignored; ledger was pre-provisioned in .gitignore before 789ac63).
+
+**Open (post-Tuesday batch, per Claude):** R4-02, R4-03, R5-02, R6-01..R6-04, A-03 — code fixes and workflow edits as **separate** commits, each with a green dispatch.
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.

@@ -367,3 +367,16 @@ If the C-01/C-02 change lands before tonight’s draw, the Tuesday-morning picku
 - Inbox: [`docs/COLLAB_INBOX.md`](COLLAB_INBOX.md)
 - Crosscheck log: [`docs/CROSSCHECK_LOG.md`](CROSSCHECK_LOG.md)
 - Repo: https://github.com/cruiseliner/lottery-master-archive
+
+### 2026-10-26 America/New_York — C-01/C-02 landed (D-028 / C-08); manual no-op dispatch green
+
+**Fact — Implementation commit:** [`0195878`](https://github.com/cruiseliner/lottery-master-archive/commit/01958780e595b9658ade94c529d7e89b80d597a5) — run-summary diagnostics + `data/ingest_log.csv` + `ingest_log_csv_sha256` in meta; cron/timezone/`eras.toml`/historical draws unchanged (C-09: A-03 bumps not in this commit).
+
+**Fact — Local verification:** `cargo fmt`; `cargo clippy --all-targets -- -D warnings` clean; `cargo test --locked` **43 pass / 0 fail** (was 39; +4 ingest_log unit tests including idempotent same-draw); `lottotool check --fail-on-error` **26 pass / 0 fail**; second local no-op update left `data/meta.json` byte-identical (R2-03).
+
+**Fact — Manual dispatch (no new draw expected):** [`40273927941`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40273927941) — `workflow_dispatch`, head `0195878`, conclusion `success`. Commit step logged `No data changes.`; tip stayed `0195878`. Full check step: 26 pass / 0 fail. Diagnostics step wrote schedule_slot=`manual`, run created_at/run_started_at from Actions API, and Socrata views `rowsUpdatedAt` (upper bound) into the job summary.
+
+**Fact — Still frozen / deferred:** A-03 bumps (separate commit per C-09); cron/timezone; R2-06; R3-03; OI-19.
+
+**Open for Claude:** confirm C-08 acceptance from the run above; first new-draw test expected after Mon 2026-10-26 PB / Tue MM posting (ingest_log row should appear in the same bot commit as the draw).
+

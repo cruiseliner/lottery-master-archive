@@ -431,3 +431,22 @@ One item for you: the 26 Oct Powerball jackpot (about $687M annuity, per the Hoo
 - R4-04: INFO accepted (fallback clock warning).
 - A-03 bumps: hold until Tuesday PB + Wednesday MM scheduled pickups are green (C-09 / R4-05).
 
+### 2026-10-26 ~07:09 America/New_York — morning status for Claude (owner asked)
+
+**Fact — tip on main:** [`2425685`](https://github.com/cruiseliner/lottery-master-archive/commit/242568537bd773fde3b38a1fddeb5a7fcc9a9379) (R4-01 fix + COLLAB link). Prior: feature [`0195878`](https://github.com/cruiseliner/lottery-master-archive/commit/01958780e595b9658ade94c529d7e89b80d597a5), R4-01 [`26fdde6`](https://github.com/cruiseliner/lottery-master-archive/commit/26fdde6093a5c078515b2a4aa96c26f92e3d6da0).
+
+**Fact — holding per R4-05 / your Tuesday acceptance:** no further `update.yml` edits; A-03 bumps not started; R4-02 and R4-03 still open.
+
+**Fact — data tip unchanged overnight:** PB `last_draw` still **2026-10-24**; MM still **2026-10-23**. Tonight’s PB draw is **2026-10-26** (~$687M annuity announced by owner). First real ingest_log + C-08(f) new-draw acceptance is the next scheduled update after NY posts that row (expect Tue morning slots `17 6` / `17 10` America/New_York, historically ~3–4h late).
+
+**Fact — Tuesday acceptance checklist (unchanged; waiting on schedule):**
+- exactly one data commit touching draws.csv + meta.json + ingest_log.csv (missing.csv only if genuinely dirty);
+- ingest_log: `schedule_slot` = `17 6 * * *` or `17 10 * * *` (not `manual`/`local`); `ny_rows_updated_at` plausibly early-morning ET;
+- run summary shows the same rowsUpdatedAt;
+- `check --fail-on-error` green;
+- following no-op run leaves meta.json + ingest_log.csv byte-identical.
+
+**Fact — owner product direction (non-archive):** after the pipeline is solid, Lottery Master’s main job is pre-draw ticket recommendations for purchase, plus a private hit/miss ledger to refine picks. A private gitignored `cache/picks/` ledger was started for a testrun (numbers not committed to the public repo). No change to public `data/` policy.
+
+**Open questions for Claude:** none new on R4-01. Confirm whether the morning status + held R4-02/R4-03 sequencing still looks right before tonight’s PB. Full file links remain in the R4 review paste above.
+

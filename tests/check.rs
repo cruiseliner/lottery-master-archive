@@ -2,8 +2,9 @@
 use chrono::{NaiveDate, TimeZone, Utc};
 use lottotool::Game;
 use lottotool::check::{self, Options, Status};
-use lottotool::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER};
+use lottotool::data::{self, DRAWS_HEADER, Draw, INGEST_LOG_HEADER, IngestLogRow, MISSING_HEADER};
 use lottotool::eras::ErasFile;
+use lottotool::ingest_log;
 use lottotool::ny;
 use std::path::{Path, PathBuf};
 
@@ -312,6 +313,192 @@ fn schema_files_match_code() {
         let s = std::fs::read_to_string(root.join(f)).unwrap();
         assert_eq!(s.trim_end(), h, "{f}");
     }
+}
+
+#[test]
+fn ingest_log_absent_ok_before_cutoff() {
+    let root = tmp("ingest-absent");
+    write(&root, Game::Megamillions, &mm_ok());
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            stale_as_warn: false,
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(status(&res, "ingest_log.present"), Status::Pass, "{res:#?}");
+    assert!(!check::any_fail(&res), "{res:#?}");
+}
+
+#[test]
+fn ingest_log_header_only_passes_on_current_cutoffs() {
+    let root = tmp("ingest-header");
+    write(&root, Game::Megamillions, &mm_ok());
+    // Header-only file, no post-cutoff draws in fixture.
+    data::write_csv(
+        &ingest_log::path(&root),
+        &[] as &[IngestLogRow],
+        INGEST_LOG_HEADER,
+    )
+    .unwrap();
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            stale_as_warn: false,
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(status(&res, "ingest_log.header"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.parse"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.unique"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.refs"), Status::Pass, "{res:#?}");
+    assert_eq!(
+        status(&res, "ingest_log.coverage"),
+        Status::Pass,
+        "{res:#?}"
+    );
+    assert!(!check::any_fail(&res), "{res:#?}");
+}
+
+#[test]
+fn ingest_log_orphan_row_fails_refs() {
+    let root = tmp("ingest-orphan");
+    write(&root, Game::Megamillions, &mm_ok());
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2099-01-01"),
+        ny_rows_updated_at: "".into(),
+        run_started_at: "2026-10-26T12:00:00Z".into(),
+        schedule_slot: "manual".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            stale_as_warn: false,
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(status(&res, "ingest_log.refs"), Status::Fail, "{res:#?}");
+    assert!(check::any_fail(&res));
+}
+
+#[test]
+fn ingest_log_missing_coverage_for_post_cutoff_draw() {
+    // MM cutoff is 2026-10-23; a draw after that without a log row must FAIL coverage.
+    let root = tmp("ingest-coverage");
+    let draws = vec![
+        draw("2026-10-23", [3, 7, 46, 49, 51], 5, None, "mm-2025"),
+        draw("2026-10-27", [1, 2, 3, 4, 5], 6, None, "mm-2025"),
+    ];
+    write(&root, Game::Megamillions, &draws);
+    data::write_csv(
+        &ingest_log::path(&root),
+        &[] as &[IngestLogRow],
+        INGEST_LOG_HEADER,
+    )
+    .unwrap();
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            stale_as_warn: false,
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(
+        status(&res, "ingest_log.coverage"),
+        Status::Fail,
+        "{res:#?}"
+    );
+    assert!(check::any_fail(&res));
+}
+
+#[test]
+fn ingest_log_post_cutoff_with_matching_row_passes() {
+    let root = tmp("ingest-covered");
+    let draws = vec![
+        draw("2026-10-23", [3, 7, 46, 49, 51], 5, None, "mm-2025"),
+        draw("2026-10-27", [1, 2, 3, 4, 5], 6, None, "mm-2025"),
+    ];
+    write(&root, Game::Megamillions, &draws);
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2026-10-27"),
+        ny_rows_updated_at: "2026-10-28T07:30:00Z".into(),
+        run_started_at: "2026-10-28T10:17:00Z".into(),
+        schedule_slot: "17 6 * * *".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            stale_as_warn: false,
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(
+        status(&res, "ingest_log.coverage"),
+        Status::Pass,
+        "{res:#?}"
+    );
+    assert_eq!(status(&res, "ingest_log.refs"), Status::Pass, "{res:#?}");
+    assert!(!check::any_fail(&res), "{res:#?}");
+}
+
+#[test]
+fn ingest_log_duplicate_key_fails_unique() {
+    let root = tmp("ingest-dup");
+    write(&root, Game::Megamillions, &mm_ok());
+    let rows = vec![
+        IngestLogRow {
+            game: "megamillions".into(),
+            draw_date: d("2026-10-20"),
+            ny_rows_updated_at: "".into(),
+            run_started_at: "a".into(),
+            schedule_slot: "manual".into(),
+        },
+        IngestLogRow {
+            game: "megamillions".into(),
+            draw_date: d("2026-10-20"),
+            ny_rows_updated_at: "".into(),
+            run_started_at: "b".into(),
+            schedule_slot: "manual".into(),
+        },
+    ];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = check::run(
+        &root,
+        &eras(),
+        &[Game::Megamillions],
+        &Options {
+            stale_as_warn: false,
+            no_stale: true,
+            now: None,
+            crosscheck: None,
+        },
+    );
+    assert_eq!(status(&res, "ingest_log.unique"), Status::Fail, "{res:#?}");
+    assert!(check::any_fail(&res));
 }
 
 /// Fall-back 2026-11-01: 06:00 America/New_York is EST (UTC-5) → 11:00 UTC.

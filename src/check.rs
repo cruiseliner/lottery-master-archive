@@ -1,8 +1,11 @@
 //! `lottotool check`: data integrity + staleness checks. Every check reports
 //! PASS / FAIL / WARN / SKIP, and SKIP always carries a reason.
 use crate::Game;
-use crate::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER, MissingRow};
+use crate::data::{
+    self, DRAWS_HEADER, Draw, INGEST_LOG_HEADER, IngestLogRow, MISSING_HEADER, MissingRow,
+};
 use crate::eras::{ErasFile, GameDef};
+use crate::ingest_log;
 use crate::ny;
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::America::New_York;
@@ -175,6 +178,7 @@ pub fn run(root: &Path, eras: &ErasFile, games: &[Game], opts: &Options) -> Vec<
             Some(n) => out.extend(crate::crosscheck::run(game, &draws, n)),
         }
     }
+    out.extend(check_ingest_log(root, games));
     out
 }
 
@@ -462,6 +466,248 @@ fn check_whites_ascending(gid: &str, draws: &[Draw]) -> Vec<CheckResult> {
             ),
         )
     }]
+}
+
+/// Feature-live cutoffs for ingest_log coverage (D-029 / R4-01 / C-08).
+/// Draws with `draw_date` **strictly after** these dates must have a log row.
+/// PB last pre-feature draw: 2026-10-24; MM: 2026-10-23.
+fn ingest_log_cutoff(game_id: &str) -> Option<NaiveDate> {
+    match game_id {
+        "powerball" => NaiveDate::from_ymd_opt(2026, 10, 24),
+        "megamillions" => NaiveDate::from_ymd_opt(2026, 10, 23),
+        _ => None,
+    }
+}
+
+fn game_from_id(id: &str) -> Option<Game> {
+    match id {
+        "powerball" => Some(Game::Powerball),
+        "megamillions" => Some(Game::Megamillions),
+        _ => None,
+    }
+}
+
+/// Archive-level ingest_log integrity (D-029 / R4-01).
+///
+/// - File may be absent when no post-cutoff draws exist yet (PASS).
+/// - When present: header, parse, unique `(game, draw_date)`, every row refs an
+///   existing draw, and every post-cutoff draw among `games` has a log row.
+fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
+    let label = "*";
+    let p = ingest_log::path(root);
+
+    // Collect post-cutoff draws for the games under check.
+    let mut required: Vec<(String, NaiveDate)> = Vec::new();
+    for &game in games {
+        let cutoff = match ingest_log_cutoff(game.id()) {
+            Some(c) => c,
+            None => continue,
+        };
+        let dp = game.draws_path(root);
+        let draws: Vec<Draw> = match data::read_csv(&dp) {
+            Ok(d) => d,
+            Err(_) => continue, // draws.parse already FAILed for this game
+        };
+        for d in draws {
+            if d.draw_date > cutoff {
+                required.push((game.id().to_string(), d.draw_date));
+            }
+        }
+    }
+
+    if !p.exists() {
+        if required.is_empty() {
+            return vec![r(
+                label,
+                "ingest_log.present",
+                Status::Pass,
+                "absent; no post-cutoff draws require log rows yet",
+            )];
+        }
+        return vec![r(
+            label,
+            "ingest_log.present",
+            Status::Fail,
+            format!(
+                "missing ingest_log.csv but {} post-cutoff draw(s) need log rows (D-029)",
+                required.len()
+            ),
+        )];
+    }
+
+    let mut out = Vec::new();
+    match data::header_of(&p) {
+        Ok(h) if h == INGEST_LOG_HEADER => out.push(r(
+            label,
+            "ingest_log.header",
+            Status::Pass,
+            "matches schema",
+        )),
+        Ok(h) => {
+            out.push(r(
+                label,
+                "ingest_log.header",
+                Status::Fail,
+                format!("got {h:?}"),
+            ));
+            for c in [
+                "ingest_log.parse",
+                "ingest_log.unique",
+                "ingest_log.refs",
+                "ingest_log.coverage",
+            ] {
+                out.push(r(label, c, Status::Skip, "header mismatch"));
+            }
+            return out;
+        }
+        Err(e) => {
+            out.push(r(
+                label,
+                "ingest_log.header",
+                Status::Fail,
+                format!("{e:#}"),
+            ));
+            for c in [
+                "ingest_log.parse",
+                "ingest_log.unique",
+                "ingest_log.refs",
+                "ingest_log.coverage",
+            ] {
+                out.push(r(label, c, Status::Skip, "header unreadable"));
+            }
+            return out;
+        }
+    }
+
+    let rows: Vec<IngestLogRow> = match data::read_csv(&p) {
+        Ok(v) => {
+            out.push(r(
+                label,
+                "ingest_log.parse",
+                Status::Pass,
+                format!("{} rows", v.len()),
+            ));
+            v
+        }
+        Err(e) => {
+            out.push(r(label, "ingest_log.parse", Status::Fail, format!("{e:#}")));
+            for c in [
+                "ingest_log.unique",
+                "ingest_log.refs",
+                "ingest_log.coverage",
+            ] {
+                out.push(r(label, c, Status::Skip, "parse failed"));
+            }
+            return out;
+        }
+    };
+
+    let mut seen = HashSet::new();
+    let dups: Vec<String> = rows
+        .iter()
+        .filter(|r| !seen.insert((r.game.clone(), r.draw_date)))
+        .map(|r| format!("{}:{}", r.game, r.draw_date))
+        .collect();
+    if dups.is_empty() {
+        out.push(r(
+            label,
+            "ingest_log.unique",
+            Status::Pass,
+            "no duplicate (game, draw_date)",
+        ));
+    } else {
+        out.push(r(
+            label,
+            "ingest_log.unique",
+            Status::Fail,
+            format!(
+                "duplicates: {}",
+                dups.iter().take(10).cloned().collect::<Vec<_>>().join(" ")
+            ),
+        ));
+    }
+
+    let mut orphan = Vec::new();
+    for row in &rows {
+        let Some(game) = game_from_id(&row.game) else {
+            orphan.push(format!("{}:{} unknown game", row.game, row.draw_date));
+            continue;
+        };
+        let draws: Vec<Draw> = match data::read_csv(&game.draws_path(root)) {
+            Ok(d) => d,
+            Err(e) => {
+                orphan.push(format!(
+                    "{}:{} draws unreadable ({e:#})",
+                    row.game, row.draw_date
+                ));
+                continue;
+            }
+        };
+        if !draws.iter().any(|d| d.draw_date == row.draw_date) {
+            orphan.push(format!("{}:{}", row.game, row.draw_date));
+        }
+    }
+    if orphan.is_empty() {
+        out.push(r(
+            label,
+            "ingest_log.refs",
+            Status::Pass,
+            "every log row references an existing draw",
+        ));
+    } else {
+        out.push(r(
+            label,
+            "ingest_log.refs",
+            Status::Fail,
+            format!(
+                "{} log row(s) with no matching draw: {}",
+                orphan.len(),
+                orphan
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        ));
+    }
+
+    let have: HashSet<(String, NaiveDate)> =
+        rows.iter().map(|r| (r.game.clone(), r.draw_date)).collect();
+    let missing: Vec<String> = required
+        .iter()
+        .filter(|k| !have.contains(&(k.0.clone(), k.1)))
+        .map(|k| format!("{}:{}", k.0, k.1))
+        .collect();
+    if missing.is_empty() {
+        out.push(r(
+            label,
+            "ingest_log.coverage",
+            Status::Pass,
+            if required.is_empty() {
+                "no post-cutoff draws yet (PB > 2026-10-24, MM > 2026-10-23)".into()
+            } else {
+                format!("all {} post-cutoff draw(s) have log rows", required.len())
+            },
+        ));
+    } else {
+        out.push(r(
+            label,
+            "ingest_log.coverage",
+            Status::Fail,
+            format!(
+                "{} post-cutoff draw(s) lack ingest_log rows (half-written update?): {}",
+                missing.len(),
+                missing
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+        ));
+    }
+    out
 }
 
 pub fn check_stale(gid: &str, g: &GameDef, draws: &[Draw], now: DateTime<Utc>) -> CheckResult {

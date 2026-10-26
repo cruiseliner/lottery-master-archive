@@ -46,7 +46,13 @@ An empty cell means null, and every null run must be listed in `missing.csv`.
 ## ingest_log.csv (`data/ingest_log.csv`)
 
 Appended by `lottotool update` only when a new draw date is added (D-028 / C-08). Not
-backfilled. Idempotent on `(game, draw_date)`.
+backfilled. Idempotent on `(game, draw_date)`. Corrupt existing files fail the update
+closed (D-029 / R4-01) — never rewritten as empty.
+
+`lottotool check` rules: `ingest_log.header`, `.parse`, `.unique`, `.refs` (every row
+matches a draw in that game's `draws.csv`), `.coverage` (every draw with
+`draw_date > 2026-10-24` for Powerball or `> 2026-10-23` for Mega Millions has a log
+row). Header-only file is fine until those post-cutoff draws appear.
 
 | Column | Notes |
 |---|---|

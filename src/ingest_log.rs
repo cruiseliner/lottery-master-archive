@@ -3,9 +3,12 @@
 //! Appended only when a new draw lands (D-028 / C-08). Idempotent on `(game, draw_date)`.
 //! `ny_rows_updated_at` is a dataset-level Socrata views upper bound on posting time;
 //! blank when the views call failed (WARN, never fail the update).
+//!
+//! Corrupt or unparseable existing files fail the update closed (D-029 / R4-01): never
+//! treat a bad file as empty and rewrite, which would silently destroy history.
 
 use crate::data::{self, INGEST_LOG_HEADER, IngestLogRow};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use std::collections::HashSet;
 use std::path::Path;
@@ -17,6 +20,9 @@ pub fn path(root: &Path) -> std::path::PathBuf {
 /// Append one row per newly added draw date. Skips dates already present for `game`.
 /// Creates the file with header when needed. Returns the number of rows newly written.
 /// Does nothing (and does not create the file) when `new_dates` is empty after filtering.
+///
+/// If `ingest_log.csv` already exists but cannot be read/parsed, returns `Err` and does
+/// not rewrite the file (D-029).
 pub fn append_for_new_draws(
     root: &Path,
     game: &str,
@@ -30,7 +36,12 @@ pub fn append_for_new_draws(
     }
     let p = path(root);
     let mut existing: Vec<IngestLogRow> = if p.exists() {
-        data::read_csv(&p).unwrap_or_default()
+        data::read_csv(&p).with_context(|| {
+            format!(
+                "existing ingest_log.csv is corrupt or unparseable ({}); refusing to rewrite (D-029)",
+                p.display()
+            )
+        })?
     } else {
         Vec::new()
     };
@@ -175,5 +186,53 @@ mod tests {
         .unwrap();
         let rows: Vec<IngestLogRow> = data::read_csv(&path(&root)).unwrap();
         assert_eq!(rows[0].ny_rows_updated_at, "");
+    }
+
+    /// R4-01 / D-029: corrupt existing file must fail the update and leave bytes unchanged.
+    #[test]
+    fn corrupt_existing_file_fails_closed() {
+        let root = tmp();
+        let p = path(&root);
+        let garbage = "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot\n\
+not-a-date,powerball,x,y,z\n";
+        std::fs::write(&p, garbage).unwrap();
+        let before = std::fs::read(&p).unwrap();
+        let err = append_for_new_draws(
+            &root,
+            "powerball",
+            &[d("2026-10-26")],
+            Some("2026-10-27T07:30:00Z"),
+            "2026-10-27T10:17:00Z",
+            "17 6 * * *",
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("corrupt") || msg.contains("unparseable") || msg.contains("D-029"),
+            "error should mention corrupt/unparseable/D-029, got: {msg}"
+        );
+        let after = std::fs::read(&p).unwrap();
+        assert_eq!(before, after, "corrupt file must not be rewritten");
+    }
+
+    /// Wrong header / truncated body is also fail-closed.
+    #[test]
+    fn wrong_header_existing_file_fails_closed() {
+        let root = tmp();
+        let p = path(&root);
+        let garbage = "wrong,header,here\n1,2,3\n";
+        std::fs::write(&p, garbage).unwrap();
+        let before = std::fs::read(&p).unwrap();
+        let err = append_for_new_draws(
+            &root,
+            "megamillions",
+            &[d("2026-10-27")],
+            None,
+            "2026-10-28T14:00:00Z",
+            "manual",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("ingest_log") || format!("{err:#}").contains("D-029"));
+        assert_eq!(before, std::fs::read(&p).unwrap());
     }
 }

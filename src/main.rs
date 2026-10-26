@@ -198,6 +198,11 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                         .map(|o| (o.clone(), d.clone()))
                 })
                 .collect();
+            // Populated when a new draw triggers ingest_log append (for --json / R4-03 prep).
+            let mut ingest_log_appended: Option<usize> = None;
+            let mut ingest_ny_rows_updated_at: Option<String> = None;
+            let mut ingest_run_started_at: Option<String> = None;
+            let mut ingest_schedule_slot: Option<String> = None;
             if !dry_run {
                 let missing_old =
                     data::read_csv::<MissingRow>(&game.missing_path(&cli.root)).unwrap_or_default();
@@ -213,6 +218,7 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                     write_changes_md(&cli.root, *game, &change_list)?;
                 }
                 // C-08 / D-028: append ingest_log only for newly added draw dates.
+                // Fail-closed on corrupt existing log (D-029 / R4-01).
                 if added > 0 {
                     let new_dates: Vec<NaiveDate> = draws
                         .iter()
@@ -235,6 +241,10 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                         &run_started,
                         &schedule_slot,
                     )?;
+                    ingest_log_appended = Some(n);
+                    ingest_ny_rows_updated_at = Some(ny_at.unwrap_or_default());
+                    ingest_run_started_at = Some(run_started);
+                    ingest_schedule_slot = Some(schedule_slot);
                     if n > 0 && !cli.json {
                         println!("  ingest_log: appended {n} row(s)");
                     }
@@ -245,12 +255,19 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             let first = draws.first().map(|d| d.draw_date.to_string());
             let last = draws.last().map(|d| d.draw_date.to_string());
             if cli.json {
+                // R4-03 prep: expose the exact ingest diagnostics the tool recorded so a
+                // later workflow can read /tmp/*.json without a second views fetch.
+                // Workflow not changed yet (R4-05).
                 println!(
                     "{}",
                     json!({"ok": true, "game": game, "source": g.ny_dataset_url, "fetched_rows": raw.len(),
                     "rows": draws.len(), "first_draw": first, "last_draw": last, "added": added, "changed": changed,
                     "missing_ranges": missing.len(), "dry_run": dry_run,
-                    "changes_md": if changed > 0 { format!("data/{}/CHANGES.md", game.id()) } else { String::new() }})
+                    "changes_md": if changed > 0 { format!("data/{}/CHANGES.md", game.id()) } else { String::new() },
+                    "ny_rows_updated_at": ingest_ny_rows_updated_at,
+                    "run_started_at": ingest_run_started_at,
+                    "schedule_slot": ingest_schedule_slot,
+                    "ingest_log_appended": ingest_log_appended})
                 );
             } else {
                 println!(

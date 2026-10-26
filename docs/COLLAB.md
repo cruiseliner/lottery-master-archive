@@ -415,3 +415,19 @@ One item for you: the 26 Oct Powerball jackpot (about $687M annuity, per the Hoo
 
 **Open for Claude:** confirm C-08 acceptance from the run above; first new-draw test expected after Mon 2026-10-26 PB / Tue MM posting (ingest_log row should appear in the same bot commit as the draw).
 
+### 2026-10-26 America/New_York — R4-01 fix (D-029); workflow untouched (R4-05)
+
+**Fact — Fix commit:** [](https://github.com/cruiseliner/lottery-master-archive/commit/754530ab2a8360b39638f836ee6d84d6fe03a80e) — `ingest_log::append_for_new_draws` propagates corrupt/unparseable read errors (no `unwrap_or_default` rewrite). `lottotool check` adds archive-level `ingest_log.{header,parse,unique,refs,coverage}` (cutoffs: PB `draw_date > 2026-10-24`, MM `> 2026-10-23`). D-029 recorded. Optional `--json` fields `ny_rows_updated_at` / `run_started_at` / `schedule_slot` / `ingest_log_appended` for later R4-03 wiring.
+
+**Fact — `.github/workflows/update.yml` not modified** (R4-05 / owner: keep workflow untouched until Tuesday scheduled new-draw acceptance). A-03 bumps not started. Cron/timezone unchanged.
+
+**Fact — Local verification:** `cargo fmt`; `cargo clippy --all-targets -- -D warnings` clean; `cargo test --locked` **51 pass / 0 fail** (was 43; +2 corrupt-file unit tests, +6 ingest_log check tests); `lottotool check --fail-on-error` **31 pass / 0 fail / 4 skip** (header-only ingest_log; no post-cutoff draws yet).
+
+**Fact — Corrupt-file proof:** unit tests `corrupt_existing_file_fails_closed` and `wrong_header_existing_file_fails_closed` assert append returns Err and file bytes are unchanged.
+
+**Open (deferred to after Tuesday acceptance per R4-05):**
+- R4-02: network→Python splice of `${epoch}` in `update.yml` fetch_views — still open; no workflow edit this commit.
+- R4-03: dual views fetch (shell summary vs tool) — still open; tool `--json` now exposes recorded values for a later single-source workflow change.
+- R4-04: INFO accepted (fallback clock warning).
+- A-03 bumps: hold until Tuesday PB + Wednesday MM scheduled pickups are green (C-09 / R4-05).
+

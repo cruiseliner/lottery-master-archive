@@ -417,7 +417,7 @@ One item for you: the 26 Oct Powerball jackpot (about $687M annuity, per the Hoo
 
 ### 2026-10-26 America/New_York — R4-01 fix (D-029); workflow untouched (R4-05)
 
-**Fact — Fix commit:** [](https://github.com/cruiseliner/lottery-master-archive/commit/754530ab2a8360b39638f836ee6d84d6fe03a80e) — `ingest_log::append_for_new_draws` propagates corrupt/unparseable read errors (no `unwrap_or_default` rewrite). `lottotool check` adds archive-level `ingest_log.{header,parse,unique,refs,coverage}` (cutoffs: PB `draw_date > 2026-10-24`, MM `> 2026-10-23`). D-029 recorded. Optional `--json` fields `ny_rows_updated_at` / `run_started_at` / `schedule_slot` / `ingest_log_appended` for later R4-03 wiring.
+**Fact — Fix commit:** [`26fdde6`](https://github.com/cruiseliner/lottery-master-archive/commit/26fdde6093a5c078515b2a4aa96c26f92e3d6da0) — `ingest_log::append_for_new_draws` propagates corrupt/unparseable read errors (no `unwrap_or_default` rewrite). `lottotool check` adds archive-level `ingest_log.{header,parse,unique,refs,coverage}` (cutoffs: PB `draw_date > 2026-10-24`, MM `> 2026-10-23`). D-029 recorded. Optional `--json` fields `ny_rows_updated_at` / `run_started_at` / `schedule_slot` / `ingest_log_appended` for later R4-03 wiring.
 
 **Fact — `.github/workflows/update.yml` not modified** (R4-05 / owner: keep workflow untouched until Tuesday scheduled new-draw acceptance). A-03 bumps not started. Cron/timezone unchanged.
 

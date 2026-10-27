@@ -554,5 +554,22 @@ Nominal UTC = ET slot under `America/New_York` with EDT (UTC−4). `created_at` 
 | 4 | Sun 2026-10-25 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-25T17:38:56Z | 2026-10-25T17:38:56Z | 3h21m | [40217472730](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40217472730) | no commit (R2-03) |
 | 5 | Mon 2026-10-26 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-26T16:47:12Z | 2026-10-26T16:47:12Z | **6h30m** | [40362445235](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40362445235) | no commit (PB still 2026-10-24) |
 | 6 | Mon 2026-10-26 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-26T19:56:45Z | 2026-10-26T19:56:45Z | **5h40m** | [40391247323](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40391247323) | no commit |
+| 7 | Tue 2026-10-27 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-27T15:52:45Z (11:52:45 ET) | 2026-10-27T15:52:45Z (11:52:45 ET) | **5h36m** | [40535341959](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40535341959) | PB +1 → [`72618c3`](https://github.com/cruiseliner/lottery-master-archive/commit/72618c36463e475fd37385d4508ce097697ae866) |
 
-_Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h. Append Tue/Wed rows when those schedule runs land.
+_Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h → Tue 06:17 slot 5h36m. Append Tue 10:17 / Wed rows when those schedule runs land.
+
+### 2026-10-27 ~13:50 America/New_York — FOR CLAUDE: Tuesday new-draw acceptance evidence (PB 2026-10-26)
+
+**Fact — run:** [`40535341959`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40535341959) — `event=schedule`, `SCHEDULE_CRON` = `17 6 * * *`, head `7afb579`, `created_at` = `run_started_at` = **2026-10-27T15:52:45Z** (11:52:45 ET), conclusion `success`. 5h36m late vs nominal 10:17Z.
+
+**Fact — data commit:** [`72618c3`](https://github.com/cruiseliner/lottery-master-archive/commit/72618c36463e475fd37385d4508ce097697ae866) — `data: NY Open Data update 2026-10-27T15:53Z (pb +1/~0, mm +0/~0)`. Exactly one bot commit; touches only `data/powerball/draws.csv` (+1), `data/meta.json`, `data/ingest_log.csv` (+1). `missing.csv` untouched.
+
+**Fact — ingest_log row:** `powerball,2026-10-26,2026-10-27T07:38:49Z,2026-10-27T15:52:45Z,17 6 * * *`. `schedule_slot` is the cron string (not `manual`), so the timezone-keyed schedule fired from the 06:17 ET entry.
+
+**Fact — NY posting:** `ny_rows_updated_at` = 2026-10-27T07:38:49Z (03:38:49 ET, early morning). The update step's `--json` reports the same value, and the live Socrata views API for `d6yy-54nr` still returns `rowsUpdatedAt` 1793086729 = 2026-10-27T07:38:49Z at ~17:49Z. The job-summary table is on the run page (GitHub's API doesn't expose step summaries, so I checked the logged values rather than the rendered table).
+
+**Fact — check:** in-run `lottotool check --fail-on-error --no-stale` green; local rerun on `72618c3`: 29 pass / 0 warn / 0 fail / 6 skip, including `ingest_log.coverage` (1 post-cutoff draw has a log row).
+
+**Pending:** Tue 10:17 ET slot (cron `17 10 * * *`) not yet run as of ~13:50 ET. When it runs as a no-op, expect no commit and `meta.json` + `ingest_log.csv` byte-identical to `72618c3`. C-15 manual dispatch is not needed.
+
+**Open for Claude:** confirm acceptance from the evidence above. If yes, the post-Tuesday batch (R4-02, R4-03, R5-02, R6-01..R6-04, A-03) starts, each as a separate commit + green dispatch.

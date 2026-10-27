@@ -428,6 +428,25 @@ If Tuesday comes back clean, you will have a stack of small fixes to batch in on
 
 **Open (post-Tuesday batch, per Claude):** R4-02, R4-03, R5-02, R6-01..R6-04, A-03 — code fixes and workflow edits as **separate** commits, each with a green dispatch.
 
+
+### 2026-10-27 (America/New_York) — owner-pasted FROM CLAUDE C-14..C-17
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-27)
+
+C-14 Expectation reset: Monday's scheduled runs were ~6h30m and ~5h40m late (if the timezone key is honored), up from ~4h05m and ~3h21m. Do not treat "no run yet" before ~13:00 ET as a problem. Record every scheduled run's created_at/run_started_at (UTC) in one table in COLLAB so the trend is visible.
+
+C-15 Fallback rule for today only: if PB 2026-10-26 has not been picked up by a scheduled run by ~18:00 ET, run a manual dispatch (not a workflow edit). That still tests the ingest_log wiring, but schedule_slot will read "manual". The "slot is a cron string" check then moves to Wednesday's Mega Millions pickup. If a scheduled run lands first, nothing changes.
+
+C-16 C-03 stands: no external trigger yet. Revisit under the existing trigger (latest due draw missing after 18:00 ET on more than 2 draw days in 30 days), and also if delays pass ~8h or scheduled runs are skipped.
+
+C-17 Reminder: the clocks change on Sun 2026-11-01. The A-07 DST tests cover the staleness due-time; no other action is needed.
+
+When the Tuesday commit and run summary come in, send them over and I’ll check them against the acceptance list.
+```
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.
@@ -509,3 +528,31 @@ If Tuesday comes back clean, you will have a stack of small fixes to batch in on
 
 **For Claude Tuesday:** will send the new-draw commit URL + run summary for the acceptance checklist.
 
+### 2026-10-27 ~07:15 America/New_York — C-14..C-17 ack + scheduled-run delay table
+
+**Fact — tip on main (pre this docs commit):** [`5d57dab`](https://github.com/cruiseliner/lottery-master-archive/commit/5d57daba65fe4d64409ccbbc9fd2936201592476). PB `last_draw` still **2026-10-24**; MM still **2026-10-23**. No Tue schedule run yet as of ~07:15 ET (expected; see C-14).
+
+**Ack (C-14):** delay expectation reset. Do **not** flag a missing Tuesday scheduled run before **~13:00 ET**. Monday samples (timezone key honored): ~6h30m / ~5h40m late, up from Sunday ~4h05m / ~3h21m.
+
+**Ack (C-15):** today-only fallback — if PB **2026-10-26** is not ingested by a scheduled run by **~18:00 ET**, then one **manual** `workflow_dispatch` (not a workflow edit). That still exercises ingest_log; `schedule_slot` will be `manual` and the “slot is a cron string” check moves to Wednesday’s Mega Millions pickup. If a scheduled run lands first, no manual dispatch. **No manual dispatch run in this docs commit.**
+
+**Ack (C-16 / C-03):** no external trigger yet. Revisit only under the existing trigger (latest due draw missing after 18:00 ET on more than 2 draw days in 30 days), or if delays pass ~8h / scheduled runs are skipped.
+
+**Ack (C-17):** DST fallback Sun **2026-11-01**. A-07 DST tests already cover staleness due-time; no other action.
+
+**Holding:** no workflow / eras / data edits; post-Tuesday batch still R4-02, R4-03, R5-02, R6-01..R6-04, A-03 (separate commits + green dispatch each). Will send Tuesday new-draw commit URL + run summary when it lands.
+
+#### Scheduled-run delay table (C-14)
+
+Nominal UTC = ET slot under `America/New_York` with EDT (UTC−4). `created_at` == `run_started_at` on every sample so far. Late-by = `run_started_at` − nominal UTC (rounded to nearest minute where noted).
+
+| # | Day | Cron | Slot (ET) | Nominal UTC | created_at (UTC) | run_started_at (UTC) | Late by | Run | Outcome |
+|---|-----|------|-----------|-------------|------------------|----------------------|---------|-----|---------|
+| 1 | Sat 2026-10-24 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-24T14:00:22Z | 2026-10-24T14:00:22Z | 3h43m | [40100566731](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40100566731) | MM +1 → `3dbe784` |
+| 2 | Sat 2026-10-24 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-24T17:27:25Z | 2026-10-24T17:27:25Z | 3h10m | [40116195158](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40116195158) | no commit (R2-03) |
+| 3 | Sun 2026-10-25 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-25T14:22:01Z | 2026-10-25T14:22:01Z | 4h05m | [40201891314](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40201891314) | PB +1 → `b13e951` |
+| 4 | Sun 2026-10-25 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-25T17:38:56Z | 2026-10-25T17:38:56Z | 3h21m | [40217472730](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40217472730) | no commit (R2-03) |
+| 5 | Mon 2026-10-26 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-26T16:47:12Z | 2026-10-26T16:47:12Z | **6h30m** | [40362445235](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40362445235) | no commit (PB still 2026-10-24) |
+| 6 | Mon 2026-10-26 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-26T19:56:45Z | 2026-10-26T19:56:45Z | **5h40m** | [40391247323](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40391247323) | no commit |
+
+_Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h. Append Tue/Wed rows when those schedule runs land.

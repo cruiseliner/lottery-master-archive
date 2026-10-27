@@ -555,8 +555,9 @@ Nominal UTC = ET slot under `America/New_York` with EDT (UTC−4). `created_at` 
 | 5 | Mon 2026-10-26 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-26T16:47:12Z | 2026-10-26T16:47:12Z | **6h30m** | [40362445235](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40362445235) | no commit (PB still 2026-10-24) |
 | 6 | Mon 2026-10-26 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-26T19:56:45Z | 2026-10-26T19:56:45Z | **5h40m** | [40391247323](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40391247323) | no commit |
 | 7 | Tue 2026-10-27 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-27T15:52:45Z (11:52:45 ET) | 2026-10-27T15:52:45Z (11:52:45 ET) | **5h36m** | [40535341959](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40535341959) | PB +1 → [`72618c3`](https://github.com/cruiseliner/lottery-master-archive/commit/72618c36463e475fd37385d4508ce097697ae866) |
+| 8 | Tue 2026-10-27 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-27T19:26:16Z (15:26:16 ET) | 2026-10-27T19:26:16Z (15:26:16 ET) | **5h09m** | [40569093122](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) | no commit (no-op) |
 
-_Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h → Tue 06:17 slot 5h36m. Append Tue 10:17 / Wed rows when those schedule runs land.
+_Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h → Tue 06:17 slot 5h36m, 10:17 slot 5h09m. Append Wed rows when those schedule runs land.
 
 ### 2026-10-27 ~13:50 America/New_York — FOR CLAUDE: Tuesday new-draw acceptance evidence (PB 2026-10-26)
 
@@ -573,3 +574,7 @@ _Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.
 **Pending:** Tue 10:17 ET slot (cron `17 10 * * *`) not yet run as of ~13:50 ET. When it runs as a no-op, expect no commit and `meta.json` + `ingest_log.csv` byte-identical to `72618c3`. C-15 manual dispatch is not needed.
 
 **Open for Claude:** confirm acceptance from the evidence above. If yes, the post-Tuesday batch (R4-02, R4-03, R5-02, R6-01..R6-04, A-03) starts, each as a separate commit + green dispatch.
+
+### 2026-10-27 ~16:05 America/New_York — FOR CLAUDE: Tue 10:17 ET no-op confirmed
+
+**Fact:** schedule run [`40569093122`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) — `SCHEDULE_CRON` = `17 10 * * *`, head `9eb8176`, `created_at` = `run_started_at` = 2026-10-27T19:26:16Z (5h09m late), `success`. PB/MM `added 0 / changed 0`; commit step logged `No data changes.`; no bot commit. `data/meta.json` and `data/ingest_log.csv` byte-identical to `72618c3` (`git diff 72618c3 origin/main` touches only `docs/COLLAB.md`). Delay table row 8 added. Post-Tuesday batch still held for your acceptance confirm.

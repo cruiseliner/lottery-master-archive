@@ -11,7 +11,7 @@
 | OI-07 | Data | PB multiplier blank 2012-01-18..2014-01-18 (210 draws). NY gives no explanation | OPEN |
 | OI-08 | Check | White-ball order is not enforced (all rows are ascending today) | CLOSED (R-13: `draws.whites_ascending` FAIL) |
 | OI-09 | CI | Whether bot commits count as "repository activity" for the 60-day schedule disable | VERIFY (WARN on non-bot age; **no** keep-alive commit — D-018 / R2-02) |
-| OI-10 | CI | Staleness grace of 30h is based on 2 observations of NY `rowsUpdatedAt` (about 03:33-03:38 ET). A slower NY update will turn the run red; that is intended but may be noisy | WATCH |
+| OI-10 | CI | Staleness grace of 30h is based on NY `rowsUpdatedAt` posting ~03:38 ET (~4h39m after the 23:00 ET draw) on two observations (C-19 / D-007). Remaining lag after NY posts is scheduler lateness (Tue 2026-10-27 samples: 5h36m on `17 6` / 5h09m on `17 10`). A slower NY update will turn the run red; that is intended but may be noisy | WATCH |
 | OI-11 | Payouts | The powerball.com parser depends on the HTML structure (`winners-table`, `data-label`, `m{N}-pb` classes). Layout changes make the fetch fail loudly (tested) | WATCH |
 | OI-12 | Relay | `scripts/relay/relay.py` is DRAFTED and NOT RUN against the API; only `--dry-run`, path blocking and the redaction helper were exercised | OPEN |
 | OI-13 | Release | `release.yml` is untested (no tag pushed) | OPEN |

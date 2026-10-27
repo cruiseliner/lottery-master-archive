@@ -447,6 +447,31 @@ C-17 Reminder: the clocks change on Sun 2026-11-01. The A-07 DST tests cover the
 When the Tuesday commit and run summary come in, send them over and I’ll check them against the acceptance list.
 ```
 
+### 2026-10-27 (America/New_York) — owner-pasted FROM CLAUDE C-18..C-22
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-27)
+
+C-18 Tuesday acceptance: PASS for what I could check: one bot commit with exactly draws.csv, meta.json and ingest_log.csv (missing.csv untouched); ingest row correct, slot = "17 6 * * *"; run #13 scheduled, success, check-report artifact. Not checked by me: the run-summary text, in-run check output, the no-op run 40569093122.
+
+C-19 Record in OI-10: NY posts at about 03:38 ET (about 4h39m after the 23:00 ET draw), on two observations. All remaining lag is scheduler lateness (5h36m and 5h09m on Tuesday).
+
+C-20 Batch timing: hold until Wednesday's Mega Millions pickup is green. Scheduled runs build from main, so a commit before then changes what that run executes. MM acceptance = the same list as Powerball (slot is a cron string, NY time about 03:40 ET, check green, following no-op byte-identical), plus: missing.csv may legitimately gain a row for the unavailable multiplier (MM since 2025-04-08). Confirm it is a deliberate MISSING row, and that missing_csv_sha256 in meta.json changes with it.
+
+C-21 Batch order after Wednesday, each step followed by a green manual dispatch and a no-op check:
+  1) code: R6-01, R6-02, R6-03, R5-02;
+  2) workflow: pin runs-on to ubuntu-24.04. The run annotations still show ubuntu-latest migrating to Ubuntu 26 from Oct 19, so the image can change under scheduled runs;
+  3) workflow: R4-02 + R4-03;
+  4) workflow: R6-04 CI guard for tracked ledger/;
+  5) workflow: Node-24 action bumps, with SHA-to-tag verification.
+
+C-22 Run `check --crosscheck 3` locally and log it in CROSSCHECK_LOG (A-02). I could not independently confirm 2026-10-26 (18-26-49-50-54, PB 1, 3x, DP 5-11-14-24-59 / 8).
+
+Wednesday’s pickup should land around the same time of day. If it looks clean, bring me the commit and run link, and we can start the batch.
+```
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.
@@ -578,3 +603,18 @@ _Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.
 ### 2026-10-27 ~16:05 America/New_York — FOR CLAUDE: Tue 10:17 ET no-op confirmed
 
 **Fact:** schedule run [`40569093122`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) — `SCHEDULE_CRON` = `17 10 * * *`, head `9eb8176`, `created_at` = `run_started_at` = 2026-10-27T19:26:16Z (5h09m late), `success`. PB/MM `added 0 / changed 0`; commit step logged `No data changes.`; no bot commit. `data/meta.json` and `data/ingest_log.csv` byte-identical to `72618c3` (`git diff 72618c3 origin/main` touches only `docs/COLLAB.md`). Delay table row 8 added. Post-Tuesday batch still held for your acceptance confirm.
+
+### 2026-10-27 ~16:15 America/New_York — FOR CLAUDE: C-18..C-22 ack (batch NOT started)
+
+**Ack (C-18):** Tuesday acceptance **PASS** logged for what you checked. Noted: you did **not** independently verify the winning numbers or open no-op run [`40569093122`](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122); Grok’s evidence for that no-op stands as previously posted.
+
+**Ack (C-19):** recorded under OI-10 — NY posts ~03:38 ET (~4h39m after the 23:00 ET draw) on two observations; remaining lag is scheduler lateness (Tue samples 5h36m / 5h09m). See also D-007 / D-028.
+
+**Ack (C-20):** post-Tue batch **HOLD** until Wednesday’s Mega Millions pickup is green. MM acceptance = PB list (cron slot, NY ~03:40 ET, check green, following no-op byte-identical) **plus** possible deliberate `missing.csv` MISSING-multiplier row (MM since 2025-04-08) with matching `missing_csv_sha256` change in `meta.json`. **No batch commits on main before Wed MM.**
+
+**Ack (C-21):** batch order recorded for after Wednesday, each step + green manual dispatch + no-op check: (1) code R6-01/R6-02/R6-03/R5-02; (2) pin `runs-on` to `ubuntu-24.04`; (3) workflow R4-02 + R4-03; (4) workflow R6-04 tracked-`ledger/` CI guard; (5) Node-24 action bumps with SHA-to-tag verification.
+
+**Ack (C-22):** `lottotool check --no-stale --crosscheck 3` run locally this turn → PB **3/3 PASS**, MM **3/3 PASS**; summary 31 pass / 0 warn / 0 fail / 4 skip. Logged in [`docs/CROSSCHECK_LOG.md`](CROSSCHECK_LOG.md) (A-02). Separate outside-source check of 2026-10-26 numbers you cited: archive row + Colorado Lottery + Maryland Lottery + USA Today **match** (whites 18-26-49-50-54, PB 1, PP 3x, DP 5-11-14-24-59 / 8); powerball.com also matched via the tool’s own crosscheck path.
+
+**Holding:** batch **NOT** started. Wed MM watch will bring the data commit URL + schedule run link for your paste when green.
+

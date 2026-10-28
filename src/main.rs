@@ -198,11 +198,17 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                         .map(|o| (o.clone(), d.clone()))
                 })
                 .collect();
-            // Populated when a new draw triggers ingest_log append (for --json / R4-03 prep).
+            // R4-03 Option A: always observe views freshness (even on no-ops) so the
+            // workflow summary can print the same value the tool would log.
+            let ny_at = ny::fetch_view_rows_updated_at(&g.ny_dataset)
+                .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+            let ny_rows_updated_at = ny_at.clone().unwrap_or_default();
+            let run_started_at = std::env::var("LOTTOTOOL_RUN_STARTED_AT").unwrap_or_else(|_| {
+                Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+            });
+            let schedule_slot = std::env::var("LOTTOTOOL_SCHEDULE_SLOT")
+                .unwrap_or_else(|_| "local".to_string());
             let mut ingest_log_appended: Option<usize> = None;
-            let mut ingest_ny_rows_updated_at: Option<String> = None;
-            let mut ingest_run_started_at: Option<String> = None;
-            let mut ingest_schedule_slot: Option<String> = None;
             if !dry_run {
                 let missing_old =
                     data::read_csv::<MissingRow>(&game.missing_path(&cli.root)).unwrap_or_default();
@@ -225,26 +231,15 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                         .filter(|d| !old.iter().any(|o| o.draw_date == d.draw_date))
                         .map(|d| d.draw_date)
                         .collect();
-                    let ny_at = ny::fetch_view_rows_updated_at(&g.ny_dataset)
-                        .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
-                    let run_started =
-                        std::env::var("LOTTOTOOL_RUN_STARTED_AT").unwrap_or_else(|_| {
-                            Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-                        });
-                    let schedule_slot = std::env::var("LOTTOTOOL_SCHEDULE_SLOT")
-                        .unwrap_or_else(|_| "local".to_string());
                     let n = ingest_log::append_for_new_draws(
                         &cli.root,
                         game.id(),
                         &new_dates,
                         ny_at.as_deref(),
-                        &run_started,
+                        &run_started_at,
                         &schedule_slot,
                     )?;
                     ingest_log_appended = Some(n);
-                    ingest_ny_rows_updated_at = Some(ny_at.unwrap_or_default());
-                    ingest_run_started_at = Some(run_started);
-                    ingest_schedule_slot = Some(schedule_slot);
                     if n > 0 && !cli.json {
                         println!("  ingest_log: appended {n} row(s)");
                     }
@@ -255,18 +250,16 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             let first = draws.first().map(|d| d.draw_date.to_string());
             let last = draws.last().map(|d| d.draw_date.to_string());
             if cli.json {
-                // R4-03 prep: expose the exact ingest diagnostics the tool recorded so a
-                // later workflow can read /tmp/*.json without a second views fetch.
-                // Workflow not changed yet (R4-05).
+                // R4-03 Option A: always emit observed freshness + slot (string, may be empty).
                 println!(
                     "{}",
                     json!({"ok": true, "game": game, "source": g.ny_dataset_url, "fetched_rows": raw.len(),
                     "rows": draws.len(), "first_draw": first, "last_draw": last, "added": added, "changed": changed,
                     "missing_ranges": missing.len(), "dry_run": dry_run,
                     "changes_md": if changed > 0 { format!("data/{}/CHANGES.md", game.id()) } else { String::new() },
-                    "ny_rows_updated_at": ingest_ny_rows_updated_at,
-                    "run_started_at": ingest_run_started_at,
-                    "schedule_slot": ingest_schedule_slot,
+                    "ny_rows_updated_at": ny_rows_updated_at,
+                    "run_started_at": run_started_at,
+                    "schedule_slot": schedule_slot,
                     "ingest_log_appended": ingest_log_appended})
                 );
             } else {

@@ -45,7 +45,21 @@ pub fn append_for_new_draws(
     } else {
         Vec::new()
     };
-    let have: HashSet<(String, NaiveDate)> = existing
+    // R6-02: refuse rewrite when header is not exactly the canonical schema
+    // (csv/serde may tolerate extra/reordered columns; write_csv would drop them).
+    if p.exists() {
+        let h = data::header_of(&p).with_context(|| {
+            format!(
+                "existing ingest_log.csv header unreadable ({}); refusing to rewrite (R6-02)",
+                p.display()
+            )
+        })?;
+        anyhow::ensure!(
+            h == INGEST_LOG_HEADER,
+            "existing ingest_log.csv header mismatch (got {h:?}); refusing to rewrite (R6-02)"
+        );
+    }
+    let mut have: HashSet<(String, NaiveDate)> = existing
         .iter()
         .map(|r| (r.game.clone(), r.draw_date))
         .collect();
@@ -63,6 +77,8 @@ pub fn append_for_new_draws(
             run_started_at: run_started_at.to_string(),
             schedule_slot: schedule_slot.to_string(),
         });
+        // R6-01: update have as keys are added so duplicate new_dates append once.
+        have.insert(key);
         added += 1;
     }
     if added == 0 {
@@ -234,5 +250,50 @@ not-a-date,powerball,x,y,z\n";
         .unwrap_err();
         assert!(err.to_string().contains("ingest_log") || format!("{err:#}").contains("D-029"));
         assert_eq!(before, std::fs::read(&p).unwrap());
+    }
+    /// R6-01: duplicate date in new_dates must append a single row.
+    #[test]
+    fn duplicate_date_in_new_dates_appends_once() {
+        let root = tmp();
+        let dates = [d("2026-10-26"), d("2026-10-26")];
+        let n = append_for_new_draws(
+            &root,
+            "powerball",
+            &dates,
+            Some("2026-10-27T07:38:49Z"),
+            "2026-10-27T15:52:45Z",
+            "17 6 * * *",
+        )
+        .unwrap();
+        assert_eq!(n, 1);
+        let rows: Vec<IngestLogRow> = data::read_csv(&path(&root)).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].draw_date, d("2026-10-26"));
+    }
+
+    /// R6-02: extra column in header must fail closed and leave bytes unchanged.
+    #[test]
+    fn extra_column_header_fails_closed() {
+        let root = tmp();
+        let p = path(&root);
+        let body = "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot,extra\n\
+powerball,2026-10-24,2026-10-25T07:40:00Z,2026-10-25T14:22:00Z,17 6 * * *,oops\n";
+        std::fs::write(&p, body).unwrap();
+        let before = std::fs::read(&p).unwrap();
+        let err = append_for_new_draws(
+            &root,
+            "powerball",
+            &[d("2026-10-26")],
+            Some("2026-10-27T07:30:00Z"),
+            "2026-10-27T10:17:00Z",
+            "17 6 * * *",
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("header") || msg.contains("R6-02"),
+            "error should mention header/R6-02, got: {msg}"
+        );
+        assert_eq!(before, std::fs::read(&p).unwrap(), "extra-column file must not be rewritten");
     }
 }

@@ -56,6 +56,24 @@ fn write(root: &Path, game: Game, draws: &[Draw]) {
     .unwrap();
 }
 
+
+fn opts_no_stale() -> Options {
+    Options {
+        stale_as_warn: false,
+        no_stale: true,
+        now: None,
+        crosscheck: None,
+    }
+}
+
+fn write_ingest_raw(root: &Path, body: &str) {
+    std::fs::write(ingest_log::path(root), body).unwrap();
+}
+
+fn run_mm(root: &Path) -> Vec<check::CheckResult> {
+    check::run(root, &eras(), &[Game::Megamillions], &opts_no_stale())
+}
+
 fn status(res: &[check::CheckResult], name: &str) -> Status {
     res.iter()
         .find(|c| c.check == name)
@@ -462,6 +480,8 @@ fn ingest_log_post_cutoff_with_matching_row_passes() {
         "{res:#?}"
     );
     assert_eq!(status(&res, "ingest_log.refs"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.timing"), Status::Pass, "{res:#?}");
     assert!(!check::any_fail(&res), "{res:#?}");
 }
 
@@ -474,14 +494,14 @@ fn ingest_log_duplicate_key_fails_unique() {
             game: "megamillions".into(),
             draw_date: d("2026-10-20"),
             ny_rows_updated_at: "".into(),
-            run_started_at: "a".into(),
+            run_started_at: "2026-10-21T12:00:00Z".into(),
             schedule_slot: "manual".into(),
         },
         IngestLogRow {
             game: "megamillions".into(),
             draw_date: d("2026-10-20"),
             ny_rows_updated_at: "".into(),
-            run_started_at: "b".into(),
+            run_started_at: "2026-10-21T13:00:00Z".into(),
             schedule_slot: "manual".into(),
         },
     ];
@@ -499,6 +519,153 @@ fn ingest_log_duplicate_key_fails_unique() {
     );
     assert_eq!(status(&res, "ingest_log.unique"), Status::Fail, "{res:#?}");
     assert!(check::any_fail(&res));
+}
+
+
+/// R5-02: blank ny_rows_updated_at is OK; fields Pass.
+#[test]
+fn ingest_log_fields_blank_ny_ok() {
+    let root = tmp("ingest-blank-ny");
+    write(&root, Game::Megamillions, &mm_ok());
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2026-10-20"),
+        ny_rows_updated_at: "".into(),
+        run_started_at: "2026-10-21T12:00:00Z".into(),
+        schedule_slot: "manual".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Pass, "{res:#?}");
+    assert!(!check::any_fail(&res), "{res:#?}");
+}
+
+/// R5-02: offset timestamp must FAIL fields.
+#[test]
+fn ingest_log_fields_offset_timestamp_fails() {
+    let root = tmp("ingest-offset-ts");
+    write(&root, Game::Megamillions, &mm_ok());
+    write_ingest_raw(
+        &root,
+        "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot\n\
+megamillions,2026-10-20,2026-10-21T12:00:00+00:00,2026-10-21T12:00:00Z,manual\n",
+    );
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Fail, "{res:#?}");
+    assert!(check::any_fail(&res));
+}
+
+/// R5-02: fractional-seconds timestamp must FAIL fields.
+#[test]
+fn ingest_log_fields_fractional_seconds_fails() {
+    let root = tmp("ingest-frac-ts");
+    write(&root, Game::Megamillions, &mm_ok());
+    write_ingest_raw(
+        &root,
+        "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot\n\
+megamillions,2026-10-20,2026-10-21T12:00:00.123Z,2026-10-21T12:00:00Z,manual\n",
+    );
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Fail, "{res:#?}");
+    assert!(check::any_fail(&res));
+}
+
+/// R5-02: wrong-case game must FAIL fields.
+#[test]
+fn ingest_log_fields_wrong_case_game_fails() {
+    let root = tmp("ingest-wrong-case");
+    write(&root, Game::Megamillions, &mm_ok());
+    write_ingest_raw(
+        &root,
+        "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot\n\
+MegaMillions,2026-10-20,,2026-10-21T12:00:00Z,manual\n",
+    );
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Fail, "{res:#?}");
+    assert!(check::any_fail(&res));
+}
+
+/// R5-02: clearly bad timestamp must FAIL fields.
+#[test]
+fn ingest_log_fields_bad_timestamp_fails() {
+    let root = tmp("ingest-bad-ts");
+    write(&root, Game::Megamillions, &mm_ok());
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2026-10-20"),
+        ny_rows_updated_at: "".into(),
+        run_started_at: "not-a-timestamp".into(),
+        schedule_slot: "manual".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Fail, "{res:#?}");
+    assert!(check::any_fail(&res));
+}
+
+/// R5-02: empty schedule_slot and `local` must FAIL fields.
+#[test]
+fn ingest_log_fields_bad_slot_fails() {
+    let root = tmp("ingest-bad-slot-empty");
+    write(&root, Game::Megamillions, &mm_ok());
+    write_ingest_raw(
+        &root,
+        "game,draw_date,ny_rows_updated_at,run_started_at,schedule_slot\n\
+megamillions,2026-10-20,,2026-10-21T12:00:00Z,\n",
+    );
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Fail, "{res:#?}");
+
+    let root2 = tmp("ingest-bad-slot-local");
+    write(&root2, Game::Megamillions, &mm_ok());
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2026-10-20"),
+        ny_rows_updated_at: "".into(),
+        run_started_at: "2026-10-21T12:00:00Z".into(),
+        schedule_slot: "local".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root2), &rows, INGEST_LOG_HEADER).unwrap();
+    let res2 = run_mm(&root2);
+    assert_eq!(status(&res2, "ingest_log.fields"), Status::Fail, "{res2:#?}");
+}
+
+/// R5-02: arbitrary well-formed 5-field cron (not only current slots) Passes.
+#[test]
+fn ingest_log_fields_arbitrary_cron_ok() {
+    let root = tmp("ingest-arb-cron");
+    write(&root, Game::Megamillions, &mm_ok());
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2026-10-20"),
+        ny_rows_updated_at: "2026-10-21T08:00:00Z".into(),
+        run_started_at: "2026-10-21T12:00:00Z".into(),
+        schedule_slot: "0 12 * * 1".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.timing"), Status::Pass, "{res:#?}");
+}
+
+/// R5-02 / D-028: ny_rows_updated_at slightly after run_started_at → timing WARN, not FAIL.
+#[test]
+fn ingest_log_timing_ny_after_run_warns() {
+    let root = tmp("ingest-ny-after");
+    write(&root, Game::Megamillions, &mm_ok());
+    let rows = vec![IngestLogRow {
+        game: "megamillions".into(),
+        draw_date: d("2026-10-20"),
+        // 10 minutes after run_started_at — beyond 300s skew
+        ny_rows_updated_at: "2026-10-21T12:10:00Z".into(),
+        run_started_at: "2026-10-21T12:00:00Z".into(),
+        schedule_slot: "manual".into(),
+    }];
+    data::write_csv(&ingest_log::path(&root), &rows, INGEST_LOG_HEADER).unwrap();
+    let res = run_mm(&root);
+    assert_eq!(status(&res, "ingest_log.fields"), Status::Pass, "{res:#?}");
+    assert_eq!(status(&res, "ingest_log.timing"), Status::Warn, "{res:#?}");
+    assert!(!check::any_fail(&res), "timing must WARN not FAIL: {res:#?}");
 }
 
 /// Fall-back 2026-11-01: 06:00 America/New_York is EST (UTC-5) → 11:00 UTC.

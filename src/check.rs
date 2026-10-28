@@ -487,11 +487,12 @@ fn game_from_id(id: &str) -> Option<Game> {
     }
 }
 
-/// Archive-level ingest_log integrity (D-029 / R4-01).
+/// Archive-level ingest_log integrity (D-029 / R4-01 / R5-02).
 ///
 /// - File may be absent when no post-cutoff draws exist yet (PASS).
-/// - When present: header, parse, unique `(game, draw_date)`, every row refs an
-///   existing draw, and every post-cutoff draw among `games` has a log row.
+/// - When present: header, parse, field formats (R5-02), timing WARNs (D-028),
+///   unique `(game, draw_date)`, every row refs an existing draw, and every
+///   post-cutoff draw among `games` has a log row.
 fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
     let label = "*";
     let p = ingest_log::path(root);
@@ -552,6 +553,8 @@ fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
             ));
             for c in [
                 "ingest_log.parse",
+                "ingest_log.fields",
+                "ingest_log.timing",
                 "ingest_log.unique",
                 "ingest_log.refs",
                 "ingest_log.coverage",
@@ -569,6 +572,8 @@ fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
             ));
             for c in [
                 "ingest_log.parse",
+                "ingest_log.fields",
+                "ingest_log.timing",
                 "ingest_log.unique",
                 "ingest_log.refs",
                 "ingest_log.coverage",
@@ -592,6 +597,8 @@ fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
         Err(e) => {
             out.push(r(label, "ingest_log.parse", Status::Fail, format!("{e:#}")));
             for c in [
+                "ingest_log.fields",
+                "ingest_log.timing",
                 "ingest_log.unique",
                 "ingest_log.refs",
                 "ingest_log.coverage",
@@ -601,6 +608,10 @@ fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
             return out;
         }
     };
+
+    // R5-02: raw field-format checks (strict timestamps, draw_date round-trip,
+    // schedule_slot = manual | well-formed 5-field cron; reject empty/local).
+    out.extend(check_ingest_log_fields(&p, &rows));
 
     let mut seen = HashSet::new();
     let dups: Vec<String> = rows
@@ -704,6 +715,246 @@ fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
                     .cloned()
                     .collect::<Vec<_>>()
                     .join(" ")
+            ),
+        ));
+    }
+    out
+}
+
+
+/// Strict `YYYY-MM-DDTHH:MM:SSZ` only — no offsets, no fractional seconds (R5-02).
+fn is_strict_utc_second(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 20 {
+        return false;
+    }
+    if b[4] != b'-'
+        || b[7] != b'-'
+        || b[10] != b'T'
+        || b[13] != b':'
+        || b[16] != b':'
+        || b[19] != b'Z'
+    {
+        return false;
+    }
+    for &i in &[0usize, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18] {
+        if !b[i].is_ascii_digit() {
+            return false;
+        }
+    }
+    chrono::NaiveDateTime::parse_from_str(&s[..19], "%Y-%m-%dT%H:%M:%S").is_ok()
+}
+
+/// `manual`, or any well-formed 5-field cron; reject empty and `local` (R5-02 / D-027).
+fn is_allowed_schedule_slot(s: &str) -> bool {
+    if s == "manual" {
+        return true;
+    }
+    if s.is_empty() || s == "local" {
+        return false;
+    }
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    if parts.len() != 5 {
+        return false;
+    }
+    parts.iter().all(|p| {
+        !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '*' | '/' | '-' | ','))
+    })
+}
+
+/// Draw date raw string must round-trip through `%Y-%m-%d` (R5-02).
+fn draw_date_raw_ok(raw: &str) -> bool {
+    match NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        Ok(d) => d.format("%Y-%m-%d").to_string() == raw,
+        Err(_) => false,
+    }
+}
+
+/// Allowed clock skew for `ny_rows_updated_at` ≤ `run_started_at` (D-028 WARN).
+const INGEST_NY_SKEW_SECS: i64 = 300;
+
+fn check_ingest_log_fields(path: &Path, typed: &[IngestLogRow]) -> Vec<CheckResult> {
+    let label = "*";
+    let mut field_problems: Vec<String> = Vec::new();
+    let mut timing_warns: Vec<String> = Vec::new();
+
+    let mut rdr = match csv::ReaderBuilder::new().has_headers(true).from_path(path) {
+        Ok(r) => r,
+        Err(e) => {
+            return vec![
+                r(
+                    label,
+                    "ingest_log.fields",
+                    Status::Fail,
+                    format!("raw re-read failed: {e}"),
+                ),
+                r(
+                    label,
+                    "ingest_log.timing",
+                    Status::Skip,
+                    "fields re-read failed",
+                ),
+            ];
+        }
+    };
+
+    let mut raw_rows: Vec<csv::StringRecord> = Vec::new();
+    for (i, rec) in rdr.records().enumerate() {
+        match rec {
+            Ok(rec) => raw_rows.push(rec),
+            Err(e) => {
+                return vec![
+                    r(
+                        label,
+                        "ingest_log.fields",
+                        Status::Fail,
+                        format!("raw row {}: {e}", i + 1),
+                    ),
+                    r(
+                        label,
+                        "ingest_log.timing",
+                        Status::Skip,
+                        "fields re-read failed",
+                    ),
+                ];
+            }
+        }
+    }
+
+    if raw_rows.len() != typed.len() {
+        return vec![
+            r(
+                label,
+                "ingest_log.fields",
+                Status::Fail,
+                format!(
+                    "raw row count {} != typed {}",
+                    raw_rows.len(),
+                    typed.len()
+                ),
+            ),
+            r(
+                label,
+                "ingest_log.timing",
+                Status::Skip,
+                "fields count mismatch",
+            ),
+        ];
+    }
+
+    for (i, (raw, row)) in raw_rows.iter().zip(typed.iter()).enumerate() {
+        let n = i + 1;
+        if raw.len() < 5 {
+            field_problems.push(format!("row {n}: expected ≥5 fields, got {}", raw.len()));
+            continue;
+        }
+        let game = raw.get(0).unwrap_or("");
+        let draw_raw = raw.get(1).unwrap_or("");
+        let ny_raw = raw.get(2).unwrap_or("");
+        let run_raw = raw.get(3).unwrap_or("");
+        let slot_raw = raw.get(4).unwrap_or("");
+
+        if game != "powerball" && game != "megamillions" {
+            field_problems.push(format!("row {n}: bad game {game:?}"));
+        }
+        if !draw_date_raw_ok(draw_raw) {
+            field_problems.push(format!(
+                "row {n}: draw_date {draw_raw:?} fails YYYY-MM-DD round-trip"
+            ));
+        }
+        if !ny_raw.is_empty() && !is_strict_utc_second(ny_raw) {
+            field_problems.push(format!(
+                "row {n}: ny_rows_updated_at {ny_raw:?} not strict YYYY-MM-DDTHH:MM:SSZ"
+            ));
+        }
+        if !is_strict_utc_second(run_raw) {
+            field_problems.push(format!(
+                "row {n}: run_started_at {run_raw:?} not strict YYYY-MM-DDTHH:MM:SSZ"
+            ));
+        }
+        if !is_allowed_schedule_slot(slot_raw) {
+            field_problems.push(format!(
+                "row {n}: schedule_slot {slot_raw:?} (want manual or 5-field cron; not empty/local)"
+            ));
+        }
+
+        // Timing WARNs (D-028): never FAIL ingest on views-timing quirks.
+        if is_strict_utc_second(run_raw) {
+            if let Ok(run_ndt) =
+                chrono::NaiveDateTime::parse_from_str(&run_raw[..19], "%Y-%m-%dT%H:%M:%S")
+            {
+                let run_date = run_ndt.date();
+                if row.draw_date > run_date {
+                    timing_warns.push(format!(
+                        "row {n}: draw_date {} > run_started_at date {run_date}",
+                        row.draw_date
+                    ));
+                }
+                if !ny_raw.is_empty() && is_strict_utc_second(ny_raw) {
+                    if let Ok(ny_ndt) = chrono::NaiveDateTime::parse_from_str(
+                        &ny_raw[..19],
+                        "%Y-%m-%dT%H:%M:%S",
+                    ) {
+                        let skew = chrono::Duration::seconds(INGEST_NY_SKEW_SECS);
+                        if ny_ndt > run_ndt + skew {
+                            timing_warns.push(format!(
+                                "row {n}: ny_rows_updated_at {ny_raw} > run_started_at {run_raw} (+{INGEST_NY_SKEW_SECS}s skew)"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    if field_problems.is_empty() {
+        out.push(r(
+            label,
+            "ingest_log.fields",
+            Status::Pass,
+            format!("{} row(s) field formats OK (R5-02)", typed.len()),
+        ));
+    } else {
+        out.push(r(
+            label,
+            "ingest_log.fields",
+            Status::Fail,
+            format!(
+                "{} field problem(s): {}",
+                field_problems.len(),
+                field_problems
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ),
+        ));
+    }
+    if timing_warns.is_empty() {
+        out.push(r(
+            label,
+            "ingest_log.timing",
+            Status::Pass,
+            "draw_date/ny_rows_updated_at ordering OK (R5-02)",
+        ));
+    } else {
+        out.push(r(
+            label,
+            "ingest_log.timing",
+            Status::Warn,
+            format!(
+                "{} timing quirk(s) (WARN per D-028): {}",
+                timing_warns.len(),
+                timing_warns
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ),
         ));
     }

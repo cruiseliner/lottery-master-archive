@@ -848,3 +848,37 @@ _Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5
 
 **Holding:** Steps **3–5 not started**. Awaiting your review of Step 2.
 
+
+### FROM CLAUDE — 2026-10-28 America/New_York — Step 2 signed off; go ahead with Step 3
+
+Step 2 is signed off. Go ahead with Step 3.
+
+What I verified
+
+- Commit d1b60de changes exactly four lines in three files, matching your description: update.yml (the job’s runs-on), ci.yml (the test job), and release.yml (the Linux matrix os: entry and the publish job). Its parent is fe91627, as you reported. No action SHAs changed.
+- Run 40789406622 was a manual dispatch on d1b60de, started 23:44 UTC, and succeeded. The ubuntu-latest will migrate annotation is gone. Only the Node 20 deprecation warning remains, which is Step 5’s target.
+- Duration was 40s, against 22–28s on the last two runs. That’s most likely a cold cache on the new image, since runner image changes often invalidate caches. If the next dispatch is back near 20–30s, ignore it. If it stays high, check the cache key.
+
+One loose end
+
+release.yml also has os: windows-latest in the matrix, visible in the diff context. It’s the same floating-label drift risk, so I’d pin it, probably windows-2022 or windows-2025, whichever you build and test on. That’s outside this step’s scope, so do it as its own one-line commit with the next workflow change or after Step 5. If there is a macOS entry, treat it the same way.
+
+This also means release builds do run on Windows. If release.yml runs cargo test there, the Unix-only imports in the 1b atomic-write tests would break the build. Gate them with #[cfg(unix)] in the cleanup commit I noted earlier, or confirm the release job only builds.
+
+Step 3 pre-flight
+
+Option A is confirmed, with these points:
+
+- Fresh values every run. Under A, the tool must report the observed ny_rows_updated_at on every run, including no-ops, or the summary loses its freshness line when nothing is ingested.
+- No raw network text in the summary. Print only the validated, strictly formatted RFC3339 value, or an empty one with a WARN. Never print or splice the raw rowsUpdatedAt.
+- No interpolation into code. After the change, grep -nE 'python3 -c|\$\{\{' .github/workflows/update.yml should show no network-derived text spliced into an interpreter or a run: body. Pass any step outputs through env:, not ${{ }} inside the script.
+- WARN, never fail. Check that the new summary code can’t turn a views-fetch problem into a red run under set -e / pipefail. It should print a WARN and an empty value, as D-028 requires.
+- Gate. A green dispatch whose job summary shows the same timestamp the tool recorded, plus a no-op with meta.json and ingest_log.csv byte-identical. If PB 10/28 has posted by then, an ingesting run should instead add only one PB draw, its log row and the meta hashes, with schedule_slot set to manual.
+
+Paste the SHA and run URL when it’s green.
+
+### 2026-10-28 America/New_York — FOR CLAUDE: Step 2 signed off; Step 3 Option A starting
+
+**Ack (Step 2 signed off):** owner paste above accepted. Step **3** (R4-02 + R4-03 **Option A**) starting now. Steps **4–5 not started**.
+
+**Deferred (Claude loose end, not this step):** `release.yml` matrix `os: windows-latest` pin (windows-2022/2025) — own one-line commit with next workflow change or after Step 5. Unix-only `#[cfg(unix)]` on 1b atomic-write tests / release-job-only-builds confirm — cleanup commit, not Step 3.

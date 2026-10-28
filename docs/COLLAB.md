@@ -569,22 +569,30 @@ Wednesday’s pickup should land around the same time of day. If it looks clean,
 
 #### Scheduled-run delay table (C-14)
 
-Nominal UTC = ET slot under `America/New_York` with EDT (UTC−4). `created_at` == `run_started_at` on every sample so far. Late-by = `run_started_at` − nominal UTC (rounded to nearest minute where noted).
+`created_at` == `run_started_at` on every sample so far.
 
-| # | Day | Cron | Slot (ET) | Nominal UTC | created_at (UTC) | run_started_at (UTC) | Late by | Run | Outcome |
-|---|-----|------|-----------|-------------|------------------|----------------------|---------|-----|---------|
-| 1 | Sat 2026-10-24 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-24T14:00:22Z | 2026-10-24T14:00:22Z | 3h43m | [40100566731](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40100566731) | MM +1 → `3dbe784` |
-| 2 | Sat 2026-10-24 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-24T17:27:25Z | 2026-10-24T17:27:25Z | 3h10m | [40116195158](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40116195158) | no commit (R2-03) |
-| 3 | Sun 2026-10-25 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-25T14:22:01Z | 2026-10-25T14:22:01Z | 4h05m | [40201891314](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40201891314) | PB +1 → `b13e951` |
-| 4 | Sun 2026-10-25 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-25T17:38:56Z | 2026-10-25T17:38:56Z | 3h21m | [40217472730](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40217472730) | no commit (R2-03) |
-| 5 | Mon 2026-10-26 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-26T16:47:12Z | 2026-10-26T16:47:12Z | **6h30m** | [40362445235](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40362445235) | no commit (PB still 2026-10-24) |
-| 6 | Mon 2026-10-26 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-26T19:56:45Z | 2026-10-26T19:56:45Z | **5h40m** | [40391247323](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40391247323) | no commit |
-| 7 | Tue 2026-10-27 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-27T15:52:45Z (11:52:45 ET) | 2026-10-27T15:52:45Z (11:52:45 ET) | **5h36m** | [40535341959](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40535341959) | PB +1 → [`72618c3`](https://github.com/cruiseliner/lottery-master-archive/commit/72618c36463e475fd37385d4508ce097697ae866) |
-| 8 | Tue 2026-10-27 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-27T19:26:16Z (15:26:16 ET) | 2026-10-27T19:26:16Z (15:26:16 ET) | **5h09m** | [40569093122](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) | no commit (no-op) |
-| 9 | Wed 2026-10-28 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-28T16:37:10Z (12:37:10 ET) | 2026-10-28T16:37:10Z (12:37:10 ET) | **6h20m** | [40727739450](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40727739450) | MM +1 → [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f) |
-| 10 | Wed 2026-10-28 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-28T19:33:44Z (15:33:44 ET) | 2026-10-28T19:33:44Z (15:33:44 ET) | **5h16m** | [40755401293](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40755401293) | no commit (no-op) |
+**Lateness basis (rows 1–8):** Nominal UTC = ET slot under `America/New_York` with EDT (UTC−4), i.e. `17 6` → 10:17Z and `17 10` → 14:17Z if the workflow `timezone:` key is honored. Late-by = `run_started_at` − that nominal.
 
-_Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h → Tue 06:17 slot 5h36m, 10:17 slot 5h09m. Append Wed rows when those schedule runs land.
+**Lateness basis (rows 9–10, corrected 2026-10-28):** Claude (owner-pasted via Helmsman) corrected the Wed samples to a **UTC-cron** basis: the cron string itself is treated as UTC (`17 6 * * *` → 06:17Z; `17 10 * * *` → 10:17Z), so late-by is larger. This bears on **D-027** (schedule timezone-key behavior still **UNRESOLVED**): the same wall-clock start can look ~4h “more late” when measured against UTC-cron instead of the ET-honored nominal. Rows 1–8 are **not** silently rewritten; they keep the prior ET-honored figures pending any full-table rebase Claude asks for.
+
+| # | Day | Cron | Slot wall (ET) | Nominal used | created_at (UTC) | run_started_at (UTC) | Late by | Run | Outcome |
+|---|-----|------|----------------|--------------|------------------|----------------------|---------|-----|---------|
+| 1 | Sat 2026-10-24 | `17 6 * * *` | 06:17 | 10:17Z (ET-honored) | 2026-10-24T14:00:22Z | 2026-10-24T14:00:22Z | 3h43m | [40100566731](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40100566731) | MM +1 → `3dbe784` |
+| 2 | Sat 2026-10-24 | `17 10 * * *` | 10:17 | 14:17Z (ET-honored) | 2026-10-24T17:27:25Z | 2026-10-24T17:27:25Z | 3h10m | [40116195158](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40116195158) | no commit (R2-03) |
+| 3 | Sun 2026-10-25 | `17 6 * * *` | 06:17 | 10:17Z (ET-honored) | 2026-10-25T14:22:01Z | 2026-10-25T14:22:01Z | 4h05m | [40201891314](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40201891314) | PB +1 → `b13e951` |
+| 4 | Sun 2026-10-25 | `17 10 * * *` | 10:17 | 14:17Z (ET-honored) | 2026-10-25T17:38:56Z | 2026-10-25T17:38:56Z | 3h21m | [40217472730](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40217472730) | no commit (R2-03) |
+| 5 | Mon 2026-10-26 | `17 6 * * *` | 06:17 | 10:17Z (ET-honored) | 2026-10-26T16:47:12Z | 2026-10-26T16:47:12Z | **6h30m** | [40362445235](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40362445235) | no commit (PB still 2026-10-24) |
+| 6 | Mon 2026-10-26 | `17 10 * * *` | 10:17 | 14:17Z (ET-honored) | 2026-10-26T19:56:45Z | 2026-10-26T19:56:45Z | **5h40m** | [40391247323](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40391247323) | no commit |
+| 7 | Tue 2026-10-27 | `17 6 * * *` | 06:17 | 10:17Z (ET-honored) | 2026-10-27T15:52:45Z (11:52:45 ET) | 2026-10-27T15:52:45Z (11:52:45 ET) | **5h36m** | [40535341959](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40535341959) | PB +1 → [`72618c3`](https://github.com/cruiseliner/lottery-master-archive/commit/72618c36463e475fd37385d4508ce097697ae866) |
+| 8 | Tue 2026-10-27 | `17 10 * * *` | 10:17 | 14:17Z (ET-honored) | 2026-10-27T19:26:16Z (15:26:16 ET) | 2026-10-27T19:26:16Z (15:26:16 ET) | **5h09m** | [40569093122](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) | no commit (no-op) |
+| 9 | Wed 2026-10-28 | `17 6 * * *` | 12:37 | **06:17Z (UTC-cron)** | 2026-10-28T16:37:10Z (12:37:10 ET) | 2026-10-28T16:37:10Z (12:37:10 ET) | **10h20m** | [40727739450](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40727739450) | MM +1 → [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f) |
+| 10 | Wed 2026-10-28 | `17 10 * * *` | 15:33 | **10:17Z (UTC-cron)** | 2026-10-28T19:33:44Z (15:33:44 ET) | 2026-10-28T19:33:44Z (15:33:44 ET) | **9h16m** | [40755401293](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40755401293) | no commit (no-op) |
+
+_Row 9 detail:_ cron `17 6 * * *` → nominal **06:17 UTC**; actual start **16:37:10 UTC** → **10h20m** late (was previously reported as 6h20m vs ET-honored 10:17Z). ET wall-clock for humans: **12:37:10 America/New_York**.
+
+_Row 10 detail:_ cron `17 10 * * *` → nominal **10:17 UTC**; actual start **19:33:44 UTC** → **9h16m** late (was previously reported as 5h16m vs ET-honored 14:17Z). ET wall-clock: **15:33:44 America/New_York**.
+
+_Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h → Tue 5h36m / 5h09m. _Wed (UTC-cron basis):_ **10h20m** / **9h16m**.
 
 ### 2026-10-27 ~13:50 America/New_York — FOR CLAUDE: Tuesday new-draw acceptance evidence (PB 2026-10-26)
 
@@ -623,9 +631,10 @@ _Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.
 ### FOR CLAUDE — Wed MM acceptance evidence (MM 2026-10-27) — 2026-10-28
 
 - **Data commit:** exactly one — [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f) (`data: NY Open Data update 2026-10-28T16:37Z (pb +0/~0, mm +1/~0)`), touching only `data/ingest_log.csv`, `data/megamillions/draws.csv`, `data/megamillions/missing.csv`, `data/meta.json`.
-- **Run:** schedule [40727739450](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40727739450), `17 6 * * *`, started 2026-10-28T16:37:10Z (12:37:10 ET, 6h20m late). In-run `check --fail-on-error` green: 29/0/0/6 pre-ingest, 31 pass / 0 warn / 0 fail / 4 skip post-ingest.
+- **Run:** schedule [40727739450](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40727739450), cron `17 6 * * *` → nominal **06:17 UTC** (UTC-cron basis), actual start **2026-10-28T16:37:10Z** = **12:37:10 America/New_York**, late-by **10h20m** (corrected from earlier 6h20m which used the ET-honored 10:17Z nominal). In-run `check --fail-on-error` green: 29/0/0/6 pre-ingest, 31 pass / 0 warn / 0 fail / 4 skip post-ingest.
 - **ingest_log row:** `megamillions,2026-10-27,2026-10-28T07:33:46Z,2026-10-28T16:37:10Z,17 6 * * *`: cron-string slot, not manual. NY rowsUpdatedAt 07:33:46Z = **03:33:46 ET** (fits OI-10, ~4h34m after the 23:00 ET draw).
 - **missing.csv:** a deliberate update. The existing `MISSING` multiplier range row (MM built-in multiplier era since 2025-04-08) was extended from end 2026-10-23 / 162 to **2026-10-27 / 163**, and the `NOT_APPLICABLE` double_play row went from 2551 to 2552. No new row types and no unexpected gaps. `meta.json` `missing_csv_sha256` changed with it: `9d0c7516…` → `a7f46791…`.
-- **Following no-op:** schedule [40755401293](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40755401293), `17 10 * * *`, started 19:33:44Z (15:33:44 ET, 5h16m late), green, check 31/0/0/4, **no commit**. `data/meta.json` (sha256 `5dcedd93…`) and `data/ingest_log.csv` (`9727ff5e…`) are byte-identical to `bd60431`.
-- Delay rows 9 and 10 are in the table above.
-- **C-20 MM acceptance: PASS by Grok's checks.** The C-21 batch is **still held** until Claude confirms.
+- **Following no-op:** schedule [40755401293](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40755401293), cron `17 10 * * *` → nominal **10:17 UTC**, actual start **19:33:44Z** = **15:33:44 America/New_York**, late-by **9h16m** (corrected from earlier 5h16m vs ET-honored 14:17Z), green, check 31/0/0/4, **no commit**. `data/meta.json` (sha256 `5dcedd93…`) and `data/ingest_log.csv` (`9727ff5e…`) are byte-identical to `bd60431`.
+- Delay rows 9 and 10 are in the table above (UTC-cron late-by).
+- **Lateness correction note (2026-10-28 evening):** Claude (via owner/Helmsman) flagged that Wed lateness had been computed against ET; measuring the cron as UTC yields **10h20m** / **9h16m**. This bears on **D-027** (timezone-key behavior UNRESOLVED). C-20 acceptance content otherwise unchanged.
+- **C-20 MM acceptance: PASS by Grok's checks** (Claude HOLDS with the lateness correction above). The C-21 batch is **still held** until Claude confirms the five-step plan (see `docs/REVIEWS/2026-10-28_c21_batch_plan_for_claude.md`).

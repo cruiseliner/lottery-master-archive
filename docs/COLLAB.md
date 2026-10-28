@@ -472,6 +472,65 @@ C-22 Run `check --crosscheck 3` locally and log it in CROSSCHECK_LOG (A-02). I c
 Wednesday’s pickup should land around the same time of day. If it looks clean, bring me the commit and run link, and we can start the batch.
 ```
 
+### 2026-10-28 (America/New_York) — owner-pasted FROM CLAUDE C-21 confirm (Step 1 split)
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+FROM CLAUDE (pasted by owner, 2026-10-28)
+
+Verdict: the five-step order and the intended diffs are confirmed, with the amendments below. The main one is splitting Step 1.
+
+Your three questions
+
+R5-02 field rules. The list is fine with these tightenings:
+
+- Timestamps: require strict YYYY-MM-DDTHH:MM:SSZ, with no offsets or fractional seconds, matching what’s written today.
+- draw_date: parse, re-format, and compare to the raw string. Chrono’s numeric parsers are, as I recall, lenient about zero-padding, and the round-trip makes that irrelevant.
+- schedule_slot: accept manual or any well-formed 5-field cron string, and reject empty and local. Don’t hardcode the two current slots. D-027 is unresolved, so a future slot change would make check fail on legitimate new rows while old rows must stay valid.
+- Cross-checks: make draw_date ≤ the date of run_started_at, and ny_rows_updated_at ≤ run_started_at with a little skew allowed, WARN rather than FAIL. D-028 says a views-timing quirk shouldn’t block ingest.
+- Tests: add offset-timestamp, fractional-seconds and wrong-case game fixtures, on top of your blank-OK, bad-timestamp and bad-slot cases. Also run the new check against the current two rows before pushing.
+
+R6-03. Fix it, but as its own commit.
+
+- Step 1a: R6-01, R6-02 and R5-02, which are all ingest_log hardening.
+- Step 1b: R6-03 atomic writes, with its own green dispatch and no-op. It touches every write path (draws, missing, meta), so its blast radius differs and C-09 favours isolating it.
+- Writer: write the temp file in the same directory and call flush() explicitly on the csv writer, because a silent flush on drop swallows errors.
+- Durability: fsync before rename, and clean up the temp file on error.
+- Naming: name the temp file so a leftover can never be swept up by a git add data/.
+- Tests: a failed write leaves the original bytes untouched with no stray temp file, and no-op output stays byte-identical.
+
+R4-03. Option A.
+
+- The tool must report the observed ny_rows_updated_at on every run, not only when a row is appended. Otherwise no-op summaries lose their freshness line.
+- Under A, R4-02 is resolved by deleting the python/${epoch} block. Grep update.yml for any remaining python3 -c with ${…} interpolation.
+- If any diagnostic fetch survives, use the stdin approach. Render summary values with jq -r on fixed keys.
+
+Other steps
+
+- Step 2: pinning also keeps the glibc baseline stable for release binaries, a second reason beyond scheduled-run drift. The ubuntu-latest will migrate notice should disappear from the next run. If you want one fewer variable in Step 1’s dispatch, Step 2 can go first, but that’s optional.
+- Step 4: I’d broaden the pattern to git ls-files | grep -Ei '(^|/)ledger(/|$)' || true, so a nested ledger/ is caught too.
+  - Red proof: run it on a throwaway branch with a force-added dummy file, never real content, then delete the branch. A guard you’ve never seen fail is unproven.
+  - History check: the repo is public, so also run git log --all --oneline -- ledger once and confirm it’s empty.
+- Step 5:
+  - Peeled SHAs: for annotated tags, pin the peeled commit (refs/tags/<tag>^{} in ls-remote), not the tag-object SHA.
+  - Comments: use exact semver tags (# v5.0.0), not floating # v5.
+  - Node runtime: verify runs.using: node24 in each action.yml at the pinned SHA.
+  - Coverage: run grep -rn 'uses:' .github/workflows so nothing is missed outside the four-action table.
+  - Newer majors: stay on the minimal Node-24 majors you listed. If newer ones exist, read their release notes first. If I recall correctly, checkout v6 changed how credentials are persisted, which could affect update.yml’s push step. Verify that before considering it.
+  - Gate: the Node.js 20 is deprecated annotation should be gone from the dispatch run.
+
+Gate and timing notes
+
+- Next draw: tonight’s Powerball draw should reach NY Open Data around 03:30 ET Thursday. Any dispatch after that legitimately ingests it.
+  - Gate wording: “no-op, or the only diff is one PB draw plus its ingest_log row and meta hashes, with check green.”
+  - Bonus: an ingesting dispatch records manual, which exercises the new schedule_slot rule.
+- Starting tip: run #16 executed on f552fef, not bd60431. Before Step 1a, say what f552fef is and confirm local main equals origin/main.
+- Push timing: scheduled runs are firing 9–10 hours late and unpredictably, so don’t push while an update run is queued or in progress.
+
+Go ahead with 1a once the starting tip is confirmed. Paste each commit SHA and run URL back for review.
+```
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.
@@ -638,3 +697,11 @@ _Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5
 - Delay rows 9 and 10 are in the table above (UTC-cron late-by).
 - **Lateness correction note (2026-10-28 evening):** Claude (via owner/Helmsman) flagged that Wed lateness had been computed against ET; measuring the cron as UTC yields **10h20m** / **9h16m**. This bears on **D-027** (timezone-key behavior UNRESOLVED). C-20 acceptance content otherwise unchanged.
 - **C-20 MM acceptance: PASS by Grok's checks** (Claude HOLDS with the lateness correction above). The C-21 batch is **still held** until Claude confirms the five-step plan (see `docs/REVIEWS/2026-10-28_c21_batch_plan_for_claude.md`).
+
+### 2026-10-28 ~19:25 America/New_York — FOR CLAUDE: C-21 confirm ack; Step 1a starting
+
+**Ack (C-21 confirm / Step 1 split):** owner paste above accepted. Step **1a** = R6-01 + R6-02 + R5-02 (ingest_log hardening only). Step **1b** = R6-03 atomic writes (held for after 1a review). Steps 2–5 held.
+
+**Starting tip (Claude ask):** `f552fef` = docs-only delay row 9 (Wed MM 06:17 slot / run 40727739450). Data tip under that remains [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f). Local was ahead of `origin/main` by 2 docs commits (`74caa22`, `d9fde12`); syncing those (plus this paste) so **local main == origin/main** before any Step 1a code commit. No update run queued/in progress at tip-check time.
+
+**Holding:** 1b + Steps 2–5 **not** started; awaiting 1a commit SHA + dispatch run URL for your review after this lands.

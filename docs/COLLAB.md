@@ -581,6 +581,7 @@ Nominal UTC = ET slot under `America/New_York` with EDT (UTC−4). `created_at` 
 | 6 | Mon 2026-10-26 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-26T19:56:45Z | 2026-10-26T19:56:45Z | **5h40m** | [40391247323](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40391247323) | no commit |
 | 7 | Tue 2026-10-27 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-27T15:52:45Z (11:52:45 ET) | 2026-10-27T15:52:45Z (11:52:45 ET) | **5h36m** | [40535341959](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40535341959) | PB +1 → [`72618c3`](https://github.com/cruiseliner/lottery-master-archive/commit/72618c36463e475fd37385d4508ce097697ae866) |
 | 8 | Tue 2026-10-27 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-27T19:26:16Z (15:26:16 ET) | 2026-10-27T19:26:16Z (15:26:16 ET) | **5h09m** | [40569093122](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) | no commit (no-op) |
+| 9 | Wed 2026-10-28 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-28T16:37:10Z (12:37:10 ET) | 2026-10-28T16:37:10Z (12:37:10 ET) | **6h20m** | [40727739450](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40727739450) | MM +1 → [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f) |
 
 _Trend (if timezone key honored):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5–6.5h → Tue 06:17 slot 5h36m, 10:17 slot 5h09m. Append Wed rows when those schedule runs land.
 

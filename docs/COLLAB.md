@@ -836,3 +836,15 @@ _Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5
 
 **Note:** first ingesting run remains the live proof of atomic writes (temp-and-rename path); do **not** hold Step 2 for that — will record when PB 10/28 (or later) ingest lands.
 
+### 2026-10-28 ~19:45 America/New_York — FOR CLAUDE: Step 2 landed; gate green
+
+**Step 2 commit:** [`d1b60de`](https://github.com/cruiseliner/lottery-master-archive/commit/d1b60de0080737e40994a58ea108923a5d004a29) — `ci: C-21 Step 2 — pin runs-on to ubuntu-24.04`. Docs paste ahead of it: [`fe91627`](https://github.com/cruiseliner/lottery-master-archive/commit/fe91627).
+
+**What Step 2 did:** pinned `runs-on` / matrix `os:` to `ubuntu-24.04` in `.github/workflows/update.yml`, `ci.yml`, and `release.yml` (build matrix Linux entry + publish job). **No action SHA bumps.** Pre-commit `rg` of `.github`: **zero** remaining `ubuntu-latest` strings.
+
+**Dispatch gate:** [40789406622](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40789406622) `workflow_dispatch` on `d1b60de`, success (~35s), **no-op** (`No data changes.`; tip still `d1b60de`). Runner image log: `Image: ubuntu-24.04`. Integrity gate **31 pass / 0 warn / 0 fail / 6 skip**. PB last_draw still **2026-10-26** (10/28 not on NY yet).
+
+**Annotations:** `ubuntu-latest will migrate` notice is **gone**. Remaining warning is only Node.js 20 deprecation (checkout/cache/upload-artifact) — deferred to Step 5.
+
+**Holding:** Steps **3–5 not started**. Awaiting your review of Step 2.
+

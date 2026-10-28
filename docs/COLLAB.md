@@ -531,6 +531,47 @@ Gate and timing notes
 Go ahead with 1a once the starting tip is confirmed. Paste each commit SHA and run URL back for review.
 ```
 
+
+### 2026-10-28 (America/New_York) — owner-pasted FROM CLAUDE Step 1a review / go-ahead for 1b
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+Step 1a is signed off. Step 1b can go.
+
+What I verified
+
+- Commit cbfd0bd is R6-01, R6-02 and R5-02 only, with R6-03 explicitly deferred to 1b as requested.
+- Run 40788303173 was a manual dispatch on cbfd0bd, started 23:34 UTC, and succeeded. It produced a check-report artifact of 2.05 KB (up from 1.94 KB), which fits the two new check rows.
+- R6-01: have is now mut and updated inside the loop, with a duplicate-date test asserting one row.
+- R6-02: the header is compared to INGEST_LOG_HEADER before any rewrite. The extra-column test asserts an error and byte-identical contents.
+- R5-02:
+  - is_strict_utc_second checks all 20 byte positions for ASCII digits or separators, so the &s[..19] slice is safe.
+  - Draw-date round-trip and strict game matching are implemented.
+  - The ny_rows_updated_at and draw_date ordering checks WARN rather than FAIL, as D-028 requires.
+  - Both error branches emit a Skip for timing, so check output stays complete.
+
+Things I couldn’t see
+
+- The tests/check.rs diff didn’t render, though about 170 lines of it are in the commit. Please confirm it has fixtures for offset timestamps, fractional seconds, wrong-case game, bad slot, and blank ny_rows_updated_at passing.
+- The run logs and check-report contents need a sign-in. I’m relying on your 31/0/0/6 and 61-test numbers.
+
+One thing to resolve before the next ingest
+
+The no-op run couldn’t exercise the new rule that schedule_slot must be manual or a cron string, and that rule now rejects empty values. A workflow_dispatch run has no github.event.schedule, so if update.yml passes that value straight through, a manual run that ingests a draw would write an empty slot. check would then fail. If the gate sits before the commit, as I assume, nothing bad lands, but ingest would block.
+
+Read how update.yml and main.rs derive schedule_slot when the event is a dispatch, and confirm it yields manual. Do this before any manual dispatch after PB 10/28 posts to NY, which should be around 03:30 ET Thursday. Scheduled runs will carry a cron string, so a scheduled pickup is unaffected. If the result is empty, fix it in the workflow expression or the tool default as its own tiny commit, ahead of 1b.
+
+Smaller notes
+
+- Cron grammar: is_allowed_schedule_slot accepts any five alphanumeric/*,/- tokens, so abc def ghi jkl mno passes. That’s looser than “well-formed”, but not blocking. Tighten it to numeric ranges, steps and lists, plus month/day names, whenever you next touch check.rs.
+- Order of operations: the header check runs after existing is read. That’s harmless here, since both paths fail closed without writing, but putting the header check first would give clearer error messages.
+
+For 1b
+
+Keep to what I specified earlier: same-directory temp file, explicit flush(), fsync before rename, cleanup on error, and a temp name that git add data/ can’t sweep up. Add failed-write tests proving the original bytes survive. Gate it with a green dispatch plus no-op, and, if PB 10/28 has posted by then, an ingesting run whose only diff is one PB draw, its ingest_log row, and the meta hashes, with check green.
+```
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.
@@ -705,3 +746,23 @@ _Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5
 **Starting tip (Claude ask):** `f552fef` = docs-only delay row 9 (Wed MM 06:17 slot / run 40727739450). Data tip under that remains [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f). Local was ahead of `origin/main` by 2 docs commits (`74caa22`, `d9fde12`); syncing those (plus this paste) so **local main == origin/main** before any Step 1a code commit. No update run queued/in progress at tip-check time.
 
 **Holding:** 1b + Steps 2–5 **not** started; awaiting 1a commit SHA + dispatch run URL for your review after this lands.
+
+### 2026-10-28 ~19:40 America/New_York — FOR CLAUDE: Step 1a review ack; schedule_slot; 1b starting
+
+**Ack (1a signed off):** owner paste above accepted. Step **1b** (R6-03 atomic writes) starting now. Steps **2–5 not started**.
+
+**R5-02 fixtures confirmed in `tests/check.rs` (cbfd0bd):**
+- `ingest_log_fields_blank_ny_ok`
+- `ingest_log_fields_offset_timestamp_fails`
+- `ingest_log_fields_fractional_seconds_fails`
+- `ingest_log_fields_wrong_case_game_fails`
+- `ingest_log_fields_bad_timestamp_fails`
+- `ingest_log_fields_bad_slot_fails` (empty + `local`)
+- plus `ingest_log_fields_arbitrary_cron_ok`, timing WARN cases
+- Current `data/ingest_log.csv` (2 rows) re-checked locally: **31 pass / 0 warn / 0 fail / 6 skip** (`check --fail-on-error --no-stale`).
+
+**schedule_slot on workflow_dispatch (Claude pre-ingest ask):** **already yields `manual` — no fix commit needed.**
+- `.github/workflows/update.yml` diagnostics step: if `SCHEDULE_CRON` (`github.event.schedule`) is non-empty → that cron string; else → `manual`. Writes `LOTTOTOOL_SCHEDULE_SLOT` into `$GITHUB_ENV` before the update step.
+- `workflow_dispatch` has empty `github.event.schedule`, so slot is `manual`.
+- `src/main.rs` reads `LOTTOTOOL_SCHEDULE_SLOT`; unset defaults to `local` (local CLI only — rejected by R5-02 if ever committed). CI always sets the env var.
+

@@ -572,6 +572,56 @@ For 1b
 Keep to what I specified earlier: same-directory temp file, explicit flush(), fsync before rename, cleanup on error, and a temp name that git add data/ can’t sweep up. Add failed-write tests proving the original bytes survive. Gate it with a green dispatch plus no-op, and, if PB 10/28 has posted by then, an ingesting run whose only diff is one PB draw, its ingest_log row, and the meta hashes, with check green.
 ```
 
+
+### 2026-10-28 (America/New_York) — owner-pasted FROM CLAUDE Step 1b signed off / go-ahead for Step 2
+
+_The following block is Claude’s reply, pasted by the owner verbatim. It is not a review until this paste (COLLAB protocol)._
+
+```
+Step 1b is signed off. Go ahead with Step 2.
+
+What I verified
+
+- Commit 33c38ed matches the spec.
+  - Temp file in the same directory, named .#lottotool-tmp.<file>.<pid>.<nanos>.
+  - Explicit flush() on the csv writer, then into_inner, sync_all, rename.
+  - Temp file removed on any error after creation.
+  - write_meta_json now goes through write_bytes_atomic, and its unchanged-content early return is kept, so no-op runs stay byte-identical.
+  - .gitignore has the temp pattern, which matches at any depth, so git add data/ can’t sweep up leftovers.
+  - Its parent is 7906aa8, as you reported.
+- Run 40789002716 was a manual dispatch on 33c38ed, started 23:40 UTC, and succeeded. The check-report is 2.05 KB, the same size as the 1a run, which is expected.
+
+Non-blocking notes
+
+These can go in a later cleanup commit, not before Step 2.
+
+- Cleanup path is untested. The failure tests only cover “temp can’t be created” (read-only directory). Nothing proves the temp is removed when a write or rename fails after the temp exists. A cheap test is to point write_bytes_atomic at a path that is an existing directory, so the rename fails, then assert no stray temp and an intact directory.
+- Tests are Unix-only and root-sensitive.
+  - PermissionsExt is imported unconditionally, so add #[cfg(unix)] if any matrix entry ever builds on another OS.
+  - Root ignores a 0555 directory, so those two tests would fail in a root container. GitHub’s runner user isn’t root, so CI is fine.
+  - The tests also restore permissions only after the first assertion, so a failed assertion leaves a read-only temp directory. Harmless, but untidy.
+- Parent-directory fsync. After the rename, there’s no fsync on the parent directory. For the local-kill case you raised, the rename can in theory be lost on a power failure, though never a truncated file. That’s acceptable here.
+- Duplication. write_csv and write_bytes_atomic repeat the same temp/fsync/rename logic. Serialising the CSV into a Vec<u8> and calling write_bytes_atomic would halve the surface area.
+- Other writers. Run grep -rnE 'fs::write|File::create|from_path\(' src once to confirm no other writer targets data/. Private ledger and cache writes can stay as they are.
+
+What’s still unproven
+
+The dispatch was a no-op, and write_meta_json returns early on unchanged content. So the CI run never took the temp-and-rename path for real. The first ingesting run, likely the scheduled pickup of PB 10/28, is the live test. On that run, check that:
+
+- the only diffs are one PB draw, its ingest_log row, and the meta hashes;
+- schedule_slot is a cron string, or manual if it was a dispatch;
+- no .#lottotool-tmp.* file appears anywhere in the commit;
+- check is green.
+
+Don’t hold Step 2 for that. Just record the result when it happens.
+
+Step 2
+
+The spec stands: pin runs-on to ubuntu-24.04 in update.yml, ci.yml, and release.yml, including the release matrix os: entry, with no SHA bumps in this commit. Before committing, grep .github for any other ubuntu-latest string, in runs-on expressions, matrix include: blocks, or comments that tooling might read.
+
+The gate is a green manual dispatch plus a no-op. The ubuntu-latest will migrate annotation should disappear from that run. If it persists, some job still uses the label. As before, don’t push while a scheduled update run is queued or in progress. Paste the SHA and run URL when it’s green.
+```
+
 ## Standing rules (executor)
 
 - No live Anthropic relay until R3-03 conditions above are met.
@@ -779,4 +829,10 @@ _Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5
 **schedule_slot pre-check (no fix commit):** confirmed before 1b — empty `github.event.schedule` → `manual` in update.yml; CI sets `LOTTOTOOL_SCHEDULE_SLOT` before update steps.
 
 **Holding:** Steps **2–5 not started**. Awaiting your review of 1b.
+
+### 2026-10-28 ~19:50 America/New_York — FOR CLAUDE: Step 1b signed off; Step 2 starting
+
+**Ack (1b signed off):** owner paste above accepted. Step **2** (pin `runs-on` to `ubuntu-24.04` in update.yml / ci.yml / release.yml, including release matrix `os:`) starting now. Steps **3–5 not started**. Non-blocking 1b cleanup notes deferred (not blockers).
+
+**Note:** first ingesting run remains the live proof of atomic writes (temp-and-rename path); do **not** hold Step 2 for that — will record when PB 10/28 (or later) ingest lands.
 

@@ -1,4 +1,4 @@
 game,field,first_draw,last_draw,rows,status,reason,source
 megamillions,multiplier,2002-05-17,2011-01-14,905,NOT_APPLICABLE,NY column description: 'Multiplier (started 1/18/2011)',NY Open Data 5xaw-6ayf column metadata
-megamillions,multiplier,2025-04-08,2026-10-23,162,MISSING,Built-in multiplier era: NY dataset has no multiplier value since 2025-04-08,NY Open Data 5xaw-6ayf; megamillions.com 2025 matrix-change news
-megamillions,double_play,2002-05-17,2026-10-23,2551,NOT_APPLICABLE,Mega Millions has no Double Play; dp_* columns are always empty for this game,schema convention (shared draws.csv schema)
+megamillions,multiplier,2025-04-08,2026-10-27,163,MISSING,Built-in multiplier era: NY dataset has no multiplier value since 2025-04-08,NY Open Data 5xaw-6ayf; megamillions.com 2025 matrix-change news
+megamillions,double_play,2002-05-17,2026-10-27,2552,NOT_APPLICABLE,Mega Millions has no Double Play; dp_* columns are always empty for this game,schema convention (shared draws.csv schema)

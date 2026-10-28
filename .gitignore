@@ -23,3 +23,7 @@ tickets*.csv
 *.swp
 __pycache__/
 *.pyc
+
+# R6-03 atomic-write leftovers (same-dir temps); never commit via git add data/
+.#lottotool-tmp.*
+

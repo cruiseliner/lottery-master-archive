@@ -682,6 +682,8 @@ fn write_meta_json(root: &std::path::Path, eras: &ErasFile) -> Result<()> {
     if std::fs::read_to_string(&path).ok().as_deref() == Some(body.as_str()) {
         return Ok(());
     }
-    std::fs::write(&path, body).with_context(|| format!("writing {}", path.display()))?;
+    // R6-03: same-dir temp + fsync + rename (via data::write_bytes_atomic).
+    data::write_bytes_atomic(&path, body.as_bytes())
+        .with_context(|| format!("writing {}", path.display()))?;
     Ok(())
 }

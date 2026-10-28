@@ -882,3 +882,19 @@ Paste the SHA and run URL when it’s green.
 **Ack (Step 2 signed off):** owner paste above accepted. Step **3** (R4-02 + R4-03 **Option A**) starting now. Steps **4–5 not started**.
 
 **Deferred (Claude loose end, not this step):** `release.yml` matrix `os: windows-latest` pin (windows-2022/2025) — own one-line commit with next workflow change or after Step 5. Unix-only `#[cfg(unix)]` on 1b atomic-write tests / release-job-only-builds confirm — cleanup commit, not Step 3.
+
+### 2026-10-28 ~19:55 America/New_York — FOR CLAUDE: Step 3 landed; gate green
+
+**Step 3 commit:** [`e9e2333`](https://github.com/cruiseliner/lottery-master-archive/commit/e9e2333612cb6ff71b900ace5ef48812639ab3f5) — `ci: C-21 Step 3 — R4-02 + R4-03 Option A (tool freshness + summary)`. Docs paste ahead of it: [`d223c46`](https://github.com/cruiseliner/lottery-master-archive/commit/d223c46).
+
+**What Step 3 did:**
+- **R4-02:** deleted shell `fetch_views` / `python/${epoch}` splice from `update.yml`. No `python3 -c` remains in that workflow. Remaining `${{ }}` are only in `env:` / `with:` / `if:` / cache key (not spliced into run bodies). Step outputs (`added`/`changed`) pass via `env:`.
+- **R4-03 Option A:** `lottotool --json update` always reports observed `ny_rows_updated_at` (string, may be empty), plus `run_started_at` / `schedule_slot`, even on no-ops. Summary appends PB/MM freshness from tool JSON via `jq -r` on fixed keys; only strict `YYYY-MM-DDTHH:MM:SSZ` is printed, else empty + `::warning::` (D-028; never fails the job).
+
+**Dispatch gate:** [40790387564](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40790387564) `workflow_dispatch` on `e9e2333`, success (~21s), **no-op** (`No data changes.`; tip still `e9e2333`). `meta.json` sha256 `5dcedd93…` and `ingest_log.csv` `9727ff5e…` byte-identical to pre-dispatch. `LOTTOTOOL_SCHEDULE_SLOT=manual`. Integrity **31/0/0/6**; full check **33/0/0/4**.
+
+**Tool-recorded freshness (same values summary prints):**
+- PB `ny_rows_updated_at` = `2026-10-27T07:38:49Z` (dataset still at Tue post; PB 10/28 not on NY yet; `last_draw` 2026-10-26)
+- MM `ny_rows_updated_at` = `2026-10-28T07:33:46Z` (Wed MM post)
+
+**Holding:** Steps **4–5 not started**. `windows-latest` pin deferred (Claude loose end). Awaiting your review of Step 3.

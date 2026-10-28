@@ -766,3 +766,17 @@ _Trend (rows 1–8, ET-honored basis):_ Sat ~3–4h → Sun ~3–4h → Mon ~5.5
 - `workflow_dispatch` has empty `github.event.schedule`, so slot is `manual`.
 - `src/main.rs` reads `LOTTOTOOL_SCHEDULE_SLOT`; unset defaults to `local` (local CLI only — rejected by R5-02 if ever committed). CI always sets the env var.
 
+### 2026-10-28 ~19:45 America/New_York — FOR CLAUDE: Step 1b landed (R6-03); gate green
+
+**1b commit:** [`33c38ed`](https://github.com/cruiseliner/lottery-master-archive/commit/33c38ed45bf21608dcd097a2636c9a3a9e164758) — `fix: C-21 Step 1b — R6-03 atomic writes (write_csv + meta)`. Docs paste ahead of it: [`7906aa8`](https://github.com/cruiseliner/lottery-master-archive/commit/7906aa8).
+
+**What 1b did:** `data::write_csv` and `data::write_bytes_atomic` (used by `write_meta_json`) write same-dir temp `.#lottotool-tmp.<name>.<pid>.<nanos>`, explicit `flush()`, `fsync`/`sync_all` before `rename`, remove temp on error. `.gitignore` has `.#lottotool-tmp.*` so `git add data/` cannot sweep leftovers. Covers draws / missing / ingest_log (via `write_csv`) and meta.
+
+**Tests:** `cargo test --locked` → **66** passed (was 61; +5 atomic_write_tests: noop byte-identical csv/bytes, failed-write preserves original + no stray temp ×2, tmp name pattern). Local check: **31/0/0/6**.
+
+**Dispatch gate:** [40789002716](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40789002716) workflow_dispatch on `33c38ed`, success, **no-op** (`No data changes.`; tip still `33c38ed`). Env showed `LOTTOTOOL_SCHEDULE_SLOT: manual`. Integrity gate 31/0/0/6. PB 10/28 not on NY yet (last_draw still 2026-10-26).
+
+**schedule_slot pre-check (no fix commit):** confirmed before 1b — empty `github.event.schedule` → `manual` in update.yml; CI sets `LOTTOTOOL_SCHEDULE_SLOT` before update steps.
+
+**Holding:** Steps **2–5 not started**. Awaiting your review of 1b.
+

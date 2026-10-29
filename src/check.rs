@@ -876,28 +876,27 @@ fn check_ingest_log_fields(path: &Path, typed: &[IngestLogRow]) -> Vec<CheckResu
         }
 
         // Timing WARNs (D-028): never FAIL ingest on views-timing quirks.
-        if is_strict_utc_second(run_raw) {
-            if let Ok(run_ndt) =
+        if is_strict_utc_second(run_raw)
+            && let Ok(run_ndt) =
                 chrono::NaiveDateTime::parse_from_str(&run_raw[..19], "%Y-%m-%dT%H:%M:%S")
+        {
+            let run_date = run_ndt.date();
+            if row.draw_date > run_date {
+                timing_warns.push(format!(
+                    "row {n}: draw_date {} > run_started_at date {run_date}",
+                    row.draw_date
+                ));
+            }
+            if !ny_raw.is_empty()
+                && is_strict_utc_second(ny_raw)
+                && let Ok(ny_ndt) =
+                    chrono::NaiveDateTime::parse_from_str(&ny_raw[..19], "%Y-%m-%dT%H:%M:%S")
             {
-                let run_date = run_ndt.date();
-                if row.draw_date > run_date {
+                let skew = chrono::Duration::seconds(INGEST_NY_SKEW_SECS);
+                if ny_ndt > run_ndt + skew {
                     timing_warns.push(format!(
-                        "row {n}: draw_date {} > run_started_at date {run_date}",
-                        row.draw_date
+                        "row {n}: ny_rows_updated_at {ny_raw} > run_started_at {run_raw} (+{INGEST_NY_SKEW_SECS}s skew)"
                     ));
-                }
-                if !ny_raw.is_empty() && is_strict_utc_second(ny_raw) {
-                    if let Ok(ny_ndt) =
-                        chrono::NaiveDateTime::parse_from_str(&ny_raw[..19], "%Y-%m-%dT%H:%M:%S")
-                    {
-                        let skew = chrono::Duration::seconds(INGEST_NY_SKEW_SECS);
-                        if ny_ndt > run_ndt + skew {
-                            timing_warns.push(format!(
-                                "row {n}: ny_rows_updated_at {ny_raw} > run_started_at {run_raw} (+{INGEST_NY_SKEW_SECS}s skew)"
-                            ));
-                        }
-                    }
                 }
             }
         }

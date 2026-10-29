@@ -139,11 +139,11 @@ fn atomic_tmp_path(final_path: &Path) -> std::path::PathBuf {
 
 /// Write `bytes` via same-dir temp + flush + fsync + rename; remove temp on any error (R6-03).
 pub fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
-    if let Some(p) = path.parent() {
-        if !p.as_os_str().is_empty() {
-            std::fs::create_dir_all(p)
-                .with_context(|| format!("creating parent for {}", path.display()))?;
-        }
+    if let Some(p) = path.parent()
+        && !p.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(p)
+            .with_context(|| format!("creating parent for {}", path.display()))?;
     }
     let tmp = atomic_tmp_path(path);
     let result = (|| {
@@ -169,10 +169,10 @@ pub fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
 
 /// Atomic CSV write: same-dir temp, explicit `flush()`, fsync, rename; cleanup on error (R6-03).
 pub fn write_csv<T: Serialize>(path: &Path, rows: &[T], header: &str) -> Result<()> {
-    if let Some(p) = path.parent() {
-        if !p.as_os_str().is_empty() {
-            std::fs::create_dir_all(p)?;
-        }
+    if let Some(p) = path.parent()
+        && !p.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(p)?;
     }
     let tmp = atomic_tmp_path(path);
     let result = (|| {

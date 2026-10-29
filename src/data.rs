@@ -157,9 +157,8 @@ pub fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
         f.sync_all()
             .with_context(|| format!("fsync temp {}", tmp.display()))?;
         drop(f);
-        std::fs::rename(&tmp, path).with_context(|| {
-            format!("renaming {} -> {}", tmp.display(), path.display())
-        })?;
+        std::fs::rename(&tmp, path)
+            .with_context(|| format!("renaming {} -> {}", tmp.display(), path.display()))?;
         Ok(())
     })();
     if result.is_err() {
@@ -197,9 +196,8 @@ pub fn write_csv<T: Serialize>(path: &Path, rows: &[T], header: &str) -> Result<
         file.sync_all()
             .with_context(|| format!("fsync temp {}", tmp.display()))?;
         drop(file);
-        std::fs::rename(&tmp, path).with_context(|| {
-            format!("renaming {} -> {}", tmp.display(), path.display())
-        })?;
+        std::fs::rename(&tmp, path)
+            .with_context(|| format!("renaming {} -> {}", tmp.display(), path.display()))?;
         Ok(())
     })();
     if result.is_err() {
@@ -272,7 +270,11 @@ mod atomic_write_tests {
         write_csv(&path, &rows, INGEST_LOG_HEADER).unwrap();
         let second = std::fs::read(&path).unwrap();
         assert_eq!(first, second, "no-op rewrite must stay byte-identical");
-        assert!(stray_temps(&dir).is_empty(), "leftover temps: {:?}", stray_temps(&dir));
+        assert!(
+            stray_temps(&dir).is_empty(),
+            "leftover temps: {:?}",
+            stray_temps(&dir)
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -322,7 +324,11 @@ mod atomic_write_tests {
         std::fs::set_permissions(&dir, perms).unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), original);
-        assert!(stray_temps(&dir).is_empty(), "stray: {:?}", stray_temps(&dir));
+        assert!(
+            stray_temps(&dir).is_empty(),
+            "stray: {:?}",
+            stray_temps(&dir)
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

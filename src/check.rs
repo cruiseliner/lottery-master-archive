@@ -721,7 +721,6 @@ fn check_ingest_log(root: &Path, games: &[Game]) -> Vec<CheckResult> {
     out
 }
 
-
 /// Strict `YYYY-MM-DDTHH:MM:SSZ` only — no offsets, no fractional seconds (R5-02).
 fn is_strict_utc_second(s: &str) -> bool {
     let b = s.as_bytes();
@@ -829,11 +828,7 @@ fn check_ingest_log_fields(path: &Path, typed: &[IngestLogRow]) -> Vec<CheckResu
                 label,
                 "ingest_log.fields",
                 Status::Fail,
-                format!(
-                    "raw row count {} != typed {}",
-                    raw_rows.len(),
-                    typed.len()
-                ),
+                format!("raw row count {} != typed {}", raw_rows.len(), typed.len()),
             ),
             r(
                 label,
@@ -893,10 +888,9 @@ fn check_ingest_log_fields(path: &Path, typed: &[IngestLogRow]) -> Vec<CheckResu
                     ));
                 }
                 if !ny_raw.is_empty() && is_strict_utc_second(ny_raw) {
-                    if let Ok(ny_ndt) = chrono::NaiveDateTime::parse_from_str(
-                        &ny_raw[..19],
-                        "%Y-%m-%dT%H:%M:%S",
-                    ) {
+                    if let Ok(ny_ndt) =
+                        chrono::NaiveDateTime::parse_from_str(&ny_raw[..19], "%Y-%m-%dT%H:%M:%S")
+                    {
                         let skew = chrono::Duration::seconds(INGEST_NY_SKEW_SECS);
                         if ny_ndt > run_ndt + skew {
                             timing_warns.push(format!(

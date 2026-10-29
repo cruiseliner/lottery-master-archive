@@ -203,11 +203,10 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             let ny_at = ny::fetch_view_rows_updated_at(&g.ny_dataset)
                 .map(|dt| dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
             let ny_rows_updated_at = ny_at.clone().unwrap_or_default();
-            let run_started_at = std::env::var("LOTTOTOOL_RUN_STARTED_AT").unwrap_or_else(|_| {
-                Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
-            });
-            let schedule_slot = std::env::var("LOTTOTOOL_SCHEDULE_SLOT")
-                .unwrap_or_else(|_| "local".to_string());
+            let run_started_at = std::env::var("LOTTOTOOL_RUN_STARTED_AT")
+                .unwrap_or_else(|_| Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+            let schedule_slot =
+                std::env::var("LOTTOTOOL_SCHEDULE_SLOT").unwrap_or_else(|_| "local".to_string());
             let mut ingest_log_appended: Option<usize> = None;
             if !dry_run {
                 let missing_old =

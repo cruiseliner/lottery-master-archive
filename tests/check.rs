@@ -56,7 +56,6 @@ fn write(root: &Path, game: Game, draws: &[Draw]) {
     .unwrap();
 }
 
-
 fn opts_no_stale() -> Options {
     Options {
         stale_as_warn: false,
@@ -521,7 +520,6 @@ fn ingest_log_duplicate_key_fails_unique() {
     assert!(check::any_fail(&res));
 }
 
-
 /// R5-02: blank ny_rows_updated_at is OK; fields Pass.
 #[test]
 fn ingest_log_fields_blank_ny_ok() {
@@ -627,7 +625,11 @@ megamillions,2026-10-20,,2026-10-21T12:00:00Z,\n",
     }];
     data::write_csv(&ingest_log::path(&root2), &rows, INGEST_LOG_HEADER).unwrap();
     let res2 = run_mm(&root2);
-    assert_eq!(status(&res2, "ingest_log.fields"), Status::Fail, "{res2:#?}");
+    assert_eq!(
+        status(&res2, "ingest_log.fields"),
+        Status::Fail,
+        "{res2:#?}"
+    );
 }
 
 /// R5-02: arbitrary well-formed 5-field cron (not only current slots) Passes.
@@ -665,7 +667,10 @@ fn ingest_log_timing_ny_after_run_warns() {
     let res = run_mm(&root);
     assert_eq!(status(&res, "ingest_log.fields"), Status::Pass, "{res:#?}");
     assert_eq!(status(&res, "ingest_log.timing"), Status::Warn, "{res:#?}");
-    assert!(!check::any_fail(&res), "timing must WARN not FAIL: {res:#?}");
+    assert!(
+        !check::any_fail(&res),
+        "timing must WARN not FAIL: {res:#?}"
+    );
 }
 
 /// Fall-back 2026-11-01: 06:00 America/New_York is EST (UTC-5) → 11:00 UTC.

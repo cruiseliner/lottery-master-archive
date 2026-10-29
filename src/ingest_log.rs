@@ -294,6 +294,10 @@ powerball,2026-10-24,2026-10-25T07:40:00Z,2026-10-25T14:22:00Z,17 6 * * *,oops\n
             msg.contains("header") || msg.contains("R6-02"),
             "error should mention header/R6-02, got: {msg}"
         );
-        assert_eq!(before, std::fs::read(&p).unwrap(), "extra-column file must not be rewritten");
+        assert_eq!(
+            before,
+            std::fs::read(&p).unwrap(),
+            "extra-column file must not be rewritten"
+        );
     }
 }

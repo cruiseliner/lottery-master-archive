@@ -737,6 +737,7 @@ The gate is a green manual dispatch plus a no-op. The ubuntu-latest will migrate
 | 8 | Tue 2026-10-27 | `17 10 * * *` | 10:17 | 14:17Z (ET-honored) | 2026-10-27T19:26:16Z (15:26:16 ET) | 2026-10-27T19:26:16Z (15:26:16 ET) | **5h09m** | [40569093122](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40569093122) | no commit (no-op) |
 | 9 | Wed 2026-10-28 | `17 6 * * *` | 12:37 | **06:17Z (UTC-cron)** | 2026-10-28T16:37:10Z (12:37:10 ET) | 2026-10-28T16:37:10Z (12:37:10 ET) | **10h20m** | [40727739450](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40727739450) | MM +1 → [`bd60431`](https://github.com/cruiseliner/lottery-master-archive/commit/bd604310366167d85dc348f436899bcb5cf0839f) |
 | 10 | Wed 2026-10-28 | `17 10 * * *` | 15:33 | **10:17Z (UTC-cron)** | 2026-10-28T19:33:44Z (15:33:44 ET) | 2026-10-28T19:33:44Z (15:33:44 ET) | **9h16m** | [40755401293](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40755401293) | no commit (no-op) |
+| 11 | Thu 2026-10-29 | `17 6 * * *` | 02:17 | **06:17Z (UTC-cron)** | 2026-10-29T16:55:20Z (12:55:20 ET) | 2026-10-29T16:55:20Z (12:55:20 ET) | **10h38m** | [40916291517](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40916291517) | PB +1 → [`c7f71cc`](https://github.com/cruiseliner/lottery-master-archive/commit/c7f71cc9857348cd2316d1e1025b26f4d0930340) |
 
 _Row 9 detail:_ cron `17 6 * * *` → nominal **06:17 UTC**; actual start **16:37:10 UTC** → **10h20m** late (was previously reported as 6h20m vs ET-honored 10:17Z). ET wall-clock for humans: **12:37:10 America/New_York**.
 
@@ -1170,3 +1171,24 @@ $ grep -rnE '11d5960|0057852|ea165f8|95815c3' .github
 | release.yml dry-run before next public tag | **OI-13** updated (OPEN; no public-tag test) |
 
 **Nothing else started.** PB 10/28 live-ingest evidence will be pasted when that watch lands.
+
+---
+
+## FOR CLAUDE — C-21 live-ingest evidence (PB 2026-10-28)
+
+**Run:** scheduled `update` run [40916291517](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40916291517), event `schedule`, `schedule_slot` = `17 6 * * *`, head `5506c68` (C-21 sign-off docs tip), `created_at` = `run_started_at` = 2026-10-29T16:55:20Z (12:55:20 ET), conclusion `success`.
+**Delay:** UTC-cron basis 06:17Z → **10h38m late** (delay table row 11). No `17 10` run had fired as of this paste. D-027 still UNRESOLVED; this is the latest and largest lateness sample so far.
+
+**Data commit:** [`c7f71cc`](https://github.com/cruiseliner/lottery-master-archive/commit/c7f71cc9857348cd2316d1e1025b26f4d0930340) by `github-actions[bot]`, title `data: NY Open Data update 2026-10-29T16:55Z (pb +1/~0, mm +0/~0)`.
+
+| Check | Result |
+|---|---|
+| Exactly one PB draw | **PASS**: `data/powerball/draws.csv` has +1 line (draw_date `2026-10-28`, era `pb-2015`, source `ny:d6yy-54nr`); no MM change |
+| Its ingest_log row | **PASS**: `data/ingest_log.csv` has +1 row `powerball,2026-10-28,2026-10-29T07:38:55Z,2026-10-29T16:55:20Z,17 6 * * *` (strict Z timestamps; draw_date round-trips; slot = 5-field cron) |
+| Meta hashes | **PASS**: `meta.json` PB `last_draw` 2026-10-26→2026-10-28, `rows` 2017→2018, `draws_csv_sha256` = `bbd54dd4…fecce4a80`, `ingest_log_csv_sha256` = `9fbabe7d…ff117bae`; both recomputed locally with `sha256sum` and match. `missing_csv_sha256` unchanged |
+| Files in commit | exactly 3: `data/ingest_log.csv`, `data/meta.json`, `data/powerball/draws.csv` |
+| No `.#lottotool-tmp.*` | **PASS**: none in the commit diff and none in the tree at `c7f71cc` |
+| Summary freshness vs log | **PASS**: tool JSON in the run log has PB `ny_rows_updated_at` = `2026-10-29T07:38:55Z`, the same value the summary row prints and the same value in the appended ingest_log row. No D-028 warnings fired (job has zero annotations) |
+| Check green | **PASS**: in-run integrity gate `31 pass, 0 warn, 0 fail, 6 skip`; full check incl. staleness `33 pass, 0 warn, 0 fail, 4 skip`; `ingest_log.timing` ordering OK (R5-02). Job `update` success (16:55:23Z→16:55:50Z). Note: bot commit triggers no `ci` workflow (GITHUB_TOKEN), so there are no check-runs on `c7f71cc` itself |
+
+Asking you to review this as the first live ingest after C-21 and close C-21 if it satisfies the caveat. Carry-overs (OI-24..OI-29, OI-13, D-027) unchanged.

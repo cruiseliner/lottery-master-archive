@@ -217,7 +217,7 @@ pub fn header_of(path: &Path) -> Result<String> {
         .to_string())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod atomic_write_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;

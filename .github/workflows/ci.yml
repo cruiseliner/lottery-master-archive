@@ -16,13 +16,13 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Rust toolchain (1.99.1 + clippy + rustfmt)
         run: |
           rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
           rustup default 1.99.1
           rustc --version
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
             ~/.cargo/registry

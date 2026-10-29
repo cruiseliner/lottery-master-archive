@@ -948,3 +948,30 @@ Paste the SHA and run URLs when it’s green.
 **CI note (pre-Step-4):** main CI has been **red on `cargo fmt --check` since Step 1a** (cbfd0bd onward); update dispatches were green. Fixing rustfmt in a separate commit before/with the R6-04 guard so the Step 4 gate (CI green on main) can pass.
 
 **Non-blocking notes from Step 3 (recorded, not implementing in Step 4):** summary pipe lines need header/delimiter or bullets; `jq -er` fail-closed for `added`; views HTTP timeout — **confirmed** `ny::fetch_view_rows_updated_at_inner` uses `.timeout(30s)` (draws fetch 90s); `LOTTOTOOL_SCHEDULE_SLOT` default `local` docs line / local default `manual`; avoid mixed tool+workflow commits as habit. `windows-latest` pin still deferred.
+
+### 2026-10-28 ~20:25 America/New_York — FOR CLAUDE: Step 4 landed; gate green
+
+**Step 4 commit:** [`15de429`](https://github.com/cruiseliner/lottery-master-archive/commit/15de429564ac5d88142028e1d714ee08c9c8d05f) — `ci: C-21 Step 4 — R6-04 guard for tracked ledger/ + tickets*.csv`. Docs paste ahead: [`d18bd78`](https://github.com/cruiseliner/lottery-master-archive/commit/d18bd78). Unblocks (fmt/clippy red since 1a, separate commits): [`063b3a8`](https://github.com/cruiseliner/lottery-master-archive/commit/063b3a8) rustfmt; [`4e453a8`](https://github.com/cruiseliner/lottery-master-archive/commit/4e453a8) `clippy::collapsible_if` let-chains in `check.rs` / `data.rs` (no behavior change). **Tip after unblock:** `4e453a8`.
+
+**What Step 4 did (R6-04 / D-030):** extended the R3-06 refuse step in `.github/workflows/ci.yml`:
+- Broadened: `tracked_ledger=$(git ls-files | grep -Ei '(^|/)ledger(/|$)' || true)` — fails on nested `…/ledger/…` too.
+- Also: `tracked_tickets=$(git ls-files | grep -Ei '(^|/)tickets[^/]*\.csv$' || true)`.
+- OK echo now mentions ledger + tickets. Cache + header-only payouts checks unchanged.
+
+**History check:** `git log --all --oneline -- ledger` → **empty**. `git log --all --oneline -- 'tickets*.csv'` → **empty**. (Public repo — confirmed before and after.)
+
+**`${{ }}` confirmation (Claude ask):** every `${{ }}` in `update.yml` is only in `with:` (cache key) or `env:` — **none** inside a `run:` body. Verified with a line-context scan + `grep -nE '\$\{\{'`.
+
+**Red proof (A-06 shape):**
+- Throwaway branch `proof/r6-04-tracked-ledger` @ `637721d` on tip `4e453a8`, force-added **fake** only: `proof-nest/ledger/PROOF_SHOULD_FAIL.txt` + `tickets_PROOF_SHOULD_FAIL.csv` (never real picks).
+- Draft PR [#3](https://github.com/cruiseliner/lottery-master-archive/pull/3) (closed, not merged).
+- Red CI: [40793341909](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40793341909) — prior steps green; failed step **Refuse tracked cache/, ledger/, tickets*.csv, or non-header payouts CSVs (R3-06 / R6-04)** on nested `proof-nest/ledger/PROOF_SHOULD_FAIL.txt` (exits before tickets check once ledger matches).
+- Remote + local proof branch deleted; main has no junk. (First proof attempt on pre-clippy tip failed at clippy before the refuse step — rebuilt on `4e453a8`.)
+
+**CI green on main:** [40793308103](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40793308103) push @ `4e453a8` — success; refuse step OK on clean tree.
+
+**Dispatch gate:** [40793407150](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40793407150) `workflow_dispatch` on `4e453a8`, success (~18s), **no-op** (`No data changes.`; tip still `4e453a8`). `meta.json` sha256 `5dcedd93…` / `ingest_log.csv` `9727ff5e…` byte-identical. `LOTTOTOOL_SCHEDULE_SLOT=manual`. Integrity **31/0/0/6**; full check **33/0/0/4**. PB `ny_rows_updated_at` `2026-10-27T07:38:49Z`; MM `2026-10-28T07:33:46Z`; PB last_draw still **2026-10-26**.
+
+**Timeouts (Claude non-blocking ask):** confirmed — `ny::fetch_view_rows_updated_at_inner` uses `.timeout(30s)`; draws fetch `90s`. Not only the 20-minute job limit.
+
+**Still held / not in Step 4:** summary pipe→table/bullets; `jq -er` fail-closed for `added`; docs line or local default for `LOTTOTOOL_SCHEDULE_SLOT`; `windows-latest` pin; nested `ledger/` gitignore broaden (CI catches; `.gitignore` still `/ledger/` root-only). **Step 5 not started.**

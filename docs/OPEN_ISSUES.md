@@ -14,7 +14,7 @@
 | OI-10 | CI | Staleness grace of 30h is based on NY `rowsUpdatedAt` posting ~03:38 ET (~4h39m after the 23:00 ET draw) on two observations (C-19 / D-007). Remaining lag after NY posts is scheduler lateness (Tue 2026-10-27 samples: 5h36m on `17 6` / 5h09m on `17 10`). A slower NY update will turn the run red; that is intended but may be noisy | WATCH |
 | OI-11 | Payouts | The powerball.com parser depends on the HTML structure (`winners-table`, `data-label`, `m{N}-pb` classes). Layout changes make the fetch fail loudly (tested) | WATCH |
 | OI-12 | Relay | `scripts/relay/relay.py` is DRAFTED and NOT RUN against the API; only `--dry-run`, path blocking and the redaction helper were exercised | OPEN |
-| OI-13 | Release | `release.yml` is untested (no tag pushed) | OPEN |
+| OI-13 | Release | `release.yml` untested on C-21 stack (rustc 1.99.1, upload v6→download v7, windows-2022/macos-14, `cfg(unix)` atomic tests). **Before next real release:** dry run via `workflow_dispatch` if added, or build-only on a branch — **do not** test with a public tag (Claude Step 5 sign-off) | OPEN |
 | OI-14 | Spec | Kickoff spec section 6 was not available to the Phase 1 executor; the build followed the parent's explicit list | VERIFY |
 | OI-15 | Check | Official-source winning-number crosscheck (`--crosscheck N`) | DONE (R-06); keep off schedule |
 | OI-16 | CI | Confirm first real scheduled run starts at 06:17 America/New_York after dual-cron+timezone change | WATCH — as of 2026-10-24 ~08:53 ET, **zero** `event=schedule` runs in Actions (06:17 not yet observed) |
@@ -25,3 +25,9 @@
 | OI-21 | CI | R2-07 SHA↔tag; Node-24 action bumps + rust-toolchain **1.99.1** + ubuntu-24.04: **DONE** C-21 Step 5 (`fe4f5f1`; CI [40794466054](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40794466054); dispatch [40794598258](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40794598258) no-op; Node 20 annotations gone) | **CLOSED** 2026-10-28 |
 | OI-22 | Relay | R3-03 before first live call: (1) dry-run (2) one tiny live call (3) spend limit; allowlisted files only; relay output untrusted / never auto-applied | DEFERRED (conditions accepted 2026-10-24) |
 | OI-23 | CI | If timezone is ignored and schedule falls back to fixed UTC crons, those crons drift by 1h after 2026-11-01 DST; A-07 DST tests cover **check** due-logic only, not cron wall-clock — plan a DST-aware schedule fallback before adopting UTC crons | OPEN (Claude t233u #3; follow-up) |
+| OI-24 | Test | Add a test that a failing write or rename after the temp file exists leaves no stray `.#lottotool-tmp.*` (Claude Step 5 carry-over) | OPEN |
+| OI-25 | CI | Fix table-row rendering in the update job summary (Claude Step 5 carry-over) | OPEN |
+| OI-26 | CI | Assign `added=$(jq -er …)` first so `set -e` catches a missing key (Claude Step 5 carry-over) | OPEN |
+| OI-27 | CI | Local pre-push hook running the same cache/ledger/tickets greps as ci.yml (CI only catches after push) | OPEN |
+| OI-28 | CI | Quarterly review of pins: `ubuntu-24.04`, `windows-2022`, `macos-14`, rustc `1.99.1`, and the four Node-24 action SHAs | OPEN |
+| OI-29 | Docs | Commit `f552fef` title still says “6h20m late”; delay-table row 9 correctly says **10h20m** (UTC-cron). Later docs fix only — do not rewrite history. D-027 still UNRESOLVED | OPEN |

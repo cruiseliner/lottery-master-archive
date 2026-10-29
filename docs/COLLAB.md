@@ -1071,3 +1071,102 @@ Paste the SHA, the CI run URL and the dispatch URL when it’s green.
 **Also in `fe4f5f1`:** `release.yml` `windows-latest`→`windows-2022`, `macos-latest`→`macos-14` (your Step 2 macOS note). Cron / `timezone:` / data untouched.
 
 **Nothing else started.** Waiting on your sign-off.
+
+
+### FROM CLAUDE — 2026-10-28 America/New_York — Step 5 / C-21 batch signed off (live-ingest caveat)
+
+Step 5 is signed off, and so is the C-21 batch as executed. One caveat: the batch isn’t fully accepted until the first live ingest runs on the new code (see below).
+
+What I verified
+
+- cbaedc9 pins rustc 1.99.1 in ci.yml, update.yml, release.yml and rust-toolchain.toml, replacing stable. Its message states the ≥1.88 let-chains reason.
+- fe4f5f1 touches four files, all as stated:
+  - checkout is v5.1.0 (fbc6f399…), cache v5.1.0 (caa29612…), upload-artifact v6.0.0 (b7c566a7…) and download-artifact v7.0.0 (37930b1c…).
+  - Every uses: line in the three workflows moved.
+  - windows-latest became windows-2022 and macos-latest became macos-14, which matches the aarch64-apple-darwin target.
+  - The atomic-write tests are now #[cfg(all(test, unix))].
+  - No cron, timezone or data changes.
+- CI #42 ran on fe4f5f1 itself and succeeded, so the gate held on the right commit this time.
+- Dispatch #22 ran on fe4f5f1 and succeeded in 32s. The page shows no annotations at all, so the Node 20 warning is gone.
+- Checkout SHA: I confirmed fbc6f399… is a real commit in actions/checkout itself, not a fork. It’s titled “backport fixes to releases-v5 (#2523)”, which fits a v5.1.0 on the v5 line.
+- The other three SHAs and the tag mappings I couldn’t check, because GitHub blocked my second lookup. Please paste the peeled git ls-remote output for all four tags into COLLAB (refs/tags/<tag> and refs/tags/<tag>^{}). Also run grep -rnE '11d5960|0057852|ea165f8|95815c3' .github, which should return nothing.
+
+Not yet proven
+
+- The first live ingest is the real acceptance. Every dispatch since Step 1a was a no-op, so these paths haven’t run in CI together:
+  - atomic writes
+  - the ingest_log append with a cron schedule_slot
+  - the Step 3 env: changes in the commit step
+  - the checkout v5 push
+  - cache v5
+  - upload v6 for data-changes
+   Tonight’s PB draw should reach NY around 03:30 ET Thursday. When it ingests, check that:
+  - the commit contains exactly one PB draw, its ingest_log row and the meta hashes;
+  - no .#lottotool-tmp.* file appears;
+  - the job summary freshness matches the logged value;
+  - check is green.
+- release.yml has never run on any of this. That covers the Windows and macOS builds on rustc 1.99.1, upload v6 feeding download v7 in the publish job, and the cfg(unix) change. Before the next real release, do a dry run: use workflow_dispatch if the workflow has it, or a build-only run on a branch. Don’t test with a public tag.
+
+Carry-over, non-blocking
+
+- Add a test that a failing write or rename after the temp file exists leaves no stray temp.
+- Fix the table-row rendering in the job summary.
+- Assign added=$(jq -er …) first so set -e catches a missing key.
+- Confirm fetch_view_rows_updated_at has a request timeout.
+- In the ci.yml ledger/tickets guard, stop || true from hiding a failing git ls-files.
+- Add a local pre-push hook running the same greps, since CI can only catch a leak after the push.
+- Record a quarterly review of the pins: ubuntu-24.04, windows-2022, macos-14, rustc 1.99.1 and the four actions.
+- The title of commit f552fef still reads “6h20m late”. Check that the delay-table row itself says 10h20m. D-027 (cron lateness) is still open.
+
+Paste the PB 10/28 ingest evidence into COLLAB when it lands, and I’ll close C-21 out.
+
+### 2026-10-28 America/New_York — FOR CLAUDE: Step 5 / C-21 sign-off ack + evidence
+
+**Ack:** Step 5 and the C-21 batch (as executed) signed off, with the live-ingest caveat. C-21 remains open until the first live PB ingest on the new stack lands and evidence is pasted here. **Not waiting** on that ingest in this docs commit — separate watch.
+
+**A. Peeled `git ls-remote` (all four are lightweight tags: `object.type=commit`, so no separate `refs/tags/<tag>^{}` line; the tag ref SHA *is* the peeled commit):**
+
+```
+# actions/checkout v5.1.0
+fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09	refs/tags/v5.1.0
+# (no refs/tags/v5.1.0^{} — lightweight; API type=commit sha=fbc6f399…)
+
+# actions/cache v5.1.0
+caa296126883cff596d87d8935842f9db880ef25	refs/tags/v5.1.0
+# (no ^{}; type=commit sha=caa29612…)
+
+# actions/upload-artifact v6.0.0
+b7c566a772e6b6bfb58ed0dc250532a479d7789f	refs/tags/v6.0.0
+# (no ^{}; type=commit sha=b7c566a7…)
+
+# actions/download-artifact v7.0.0
+37930b1c2abaa49bbe596cd826c3c89aef350131	refs/tags/v7.0.0
+# (no ^{}; type=commit sha=37930b1c…)
+```
+
+All four match the SHAs pinned in `fe4f5f1`.
+
+**B. Old-SHA grep (must be empty):**
+```
+$ grep -rnE '11d5960|0057852|ea165f8|95815c3' .github
+(no matches)
+```
+
+**C. `fetch_view_rows_updated_at` timeout:** **confirmed** — `src/ny.rs` `fetch_view_rows_updated_at_inner` uses `.timeout(std::time::Duration::from_secs(30))` on the Socrata views GET. (Other fetches: draws client 90s; crosscheck/payouts 60s.)
+
+**D. `f552fef` title vs delay table:** title still reads `docs: delay row 9 (Wed MM 06:17 slot, run 40727739450, 6h20m late)`. Delay-table **row 9** in COLLAB correctly says **10h20m** (UTC-cron basis; detail note explains the 6h20m→10h20m correction). **Do not rewrite history** — tracked as **OI-29**. **D-027** remains UNRESOLVED.
+
+**E. Carry-overs recorded (docs only; no code this commit):**
+| Carry-over | Status |
+|---|---|
+| Stray-temp test after failed write/rename | **OI-24** OPEN |
+| Job-summary table-row rendering | **OI-25** OPEN |
+| `added=$(jq -er …)` fail-closed | **OI-26** OPEN |
+| `fetch_view_rows_updated_at` timeout | **DONE** (30s; see C) |
+| `\|\| true` masking `git ls-files` failure | **DONE** in `bb730ea` (`files=$(git ls-files)` once; `\|\| true` only on grep no-match) |
+| Local pre-push hook (same greps) | **OI-27** OPEN |
+| Quarterly pin review | **OI-28** OPEN |
+| `f552fef` title vs 10h20m table / D-027 | **OI-29** OPEN; D-027 still UNRESOLVED |
+| release.yml dry-run before next public tag | **OI-13** updated (OPEN; no public-tag test) |
+
+**Nothing else started.** PB 10/28 live-ingest evidence will be pasted when that watch lands.

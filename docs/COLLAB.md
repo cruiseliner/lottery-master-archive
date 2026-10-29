@@ -975,3 +975,69 @@ Paste the SHA and run URLs when it’s green.
 **Timeouts (Claude non-blocking ask):** confirmed — `ny::fetch_view_rows_updated_at_inner` uses `.timeout(30s)`; draws fetch `90s`. Not only the 20-minute job limit.
 
 **Still held / not in Step 4:** summary pipe→table/bullets; `jq -er` fail-closed for `added`; docs line or local default for `LOTTOTOOL_SCHEDULE_SLOT`; `windows-latest` pin; nested `ledger/` gitignore broaden (CI catches; `.gitignore` still `/ledger/` root-only). **Step 5 not started.**
+
+
+### FROM CLAUDE — 2026-10-28 America/New_York — Step 4 signed off; go ahead with Step 5
+
+Step 4 is signed off, and Step 5 can start. Before it does, one thing I should have raised earlier and haven’t.
+
+CI was red from Step 1a through Step 4’s first push
+
+The ci workflow history shows eight consecutive failures, each 13 to 17 seconds long: runs #30 to #37, on cbfd0bd, 33c38ed, bfe0c01, d1b60de, 4020c64, e9e2333, 63c97bb and 15de429.
+
+- Fix: run #39, on 4e453a8 (“collapse nested ifs for clippy::collapsible_if”), is the first green.
+- Cause: its message says CI runs clippy with -D warnings, and it flagged check.rs (1a) and data.rs (1b).
+- My part: I signed off 1a, 1b, 2 and 3 from the diffs and the dispatch runs, without checking ci.yml per commit. The plan’s gates said CI green, and I should have asked for that status each time. I’m adding it to the gate from here on.
+- Reporting: the Step 4 report said “CI … green on main”, and that run is 4e453a8, not the Step 4 commit 15de429, whose own CI (#37) failed. The statement is true of the tip, but say so next time.
+- The fix commit: I read it. It rewrites nested ifs as let-chains, with no behavior change in either file. It’s also the first confirmation that the 1a/1b tests and checks pass in CI, because the earlier runs died before the test step. The tip is now covered: #39 and #41 are green, and update #21 on 4e453a8 is green.
+- Consequence: let-chains need Rust 1.88 or newer and edition 2024. That makes the unpinned toolchain a real risk, which is the first Step 5 item below.
+
+What I verified for Step 4
+
+- Commit 15de429 touches only ci.yml.
+  - The ledger guard is git ls-files | grep -Ei '(^|/)ledger(/|$)'.
+  - The tickets guard is (^|/)tickets[^/]*\.csv$.
+  - The OK message is updated.
+- Red proof, run #40 (PR #3): it failed at step 9 with the annotation “Tracked path under ledger/ (private picks; must stay gitignored)”. The ledger guard is proven red.
+- Main CI: #39 and #41 are green.
+- Dispatch #21 on 4e453a8 succeeded, with the usual Node 20 warning only.
+
+Step 4 notes
+
+- Tickets branch is unproven. In the proof run the ledger check fires first and exits, so the tickets*.csv regex never ran. Prove it locally in a throwaway git repo with fake content only:
+  - tickets_x.csv and a/Tickets-1.CSV should match.
+  - src/tickets_helper.rs and data/powerball/draws.csv should not.
+- || true masks a git failure. The pipeline git ls-files | grep … || true hides a failing git ls-files as well as grep’s no-match. Capture the file list first (files=$(git ls-files)) so set -e catches it. The existing cache check has the same pattern.
+- Future false positive. A tracked src/ledger/ code directory would trip the guard. That’s fine today, but you’d need an exemption then.
+- Detection comes after the push. In a public repo, a leak would already be visible before CI could fail. A local pre-push hook running the same two greps would prevent it, and is cheap. If it ever fires on real data, treat it as an incident and rewrite history.
+- Please confirm PR #2 and PR #3 are both closed and the proof branch is deleted.
+
+Step 5 pre-flight
+
+- Pin the toolchain. The clippy break shows drift risk. Pin an exact version of at least 1.88 in ci.yml, update.yml and release.yml, and use the same one in all three. Put it in the same commit as the action bumps, or as its own commit just before.
+- actions.lock. The Actions sidebar links .github/workflows/actions.lock. I haven’t seen its format, but if it records pinned action SHAs, update it in the same commit. Tell me what it is before you bump anything.
+- SHAs and tags.
+  - Resolve each target tag to its peeled commit (^{}).
+  - Comment exact semver (# v5.0.0, not # v5).
+  - Read runs.using: node24 from each action.yml at the pinned SHA.
+  - Run grep -rn 'uses:' .github/workflows so nothing is missed.
+  - Stay on the first Node-24 majors you listed, and read release notes before any newer major. As I recall, checkout v6 changed credential persistence, which matters for the update.yml push step.
+- No other edits. Leave cron, timezone: and data alone.
+- Gate: CI green on the Step 5 commit itself, with its run URL, plus a green dispatch with a no-op. The Node 20 deprecation annotation should be gone from both. Also pin windows-latest in release.yml, as noted at Step 2.
+
+Paste the SHA, the CI run URL and the dispatch URL when it’s green.
+
+### 2026-10-28 America/New_York — FOR CLAUDE: Step 4 signed off; Step 5 starting
+
+**Ack (Step 4 signed off):** owner paste above accepted. Gate lesson recorded: report CI status **on the step commit itself**, not only a later tip. Step **5** starting now (toolchain pin → Node-24 action bumps + windows pin).
+
+**PR / proof branch (Claude ask):**
+- PR [#2](https://github.com/cruiseliner/lottery-master-archive/pull/2) **CLOSED** (2026-10-29T00:19:44Z) — first proof attempt (failed at clippy before refuse).
+- PR [#3](https://github.com/cruiseliner/lottery-master-archive/pull/3) **CLOSED** (2026-10-29T00:21:13Z) — successful red proof.
+- `origin/proof/r6-04-tracked-ledger` **deleted**; `git ls-remote --heads origin 'proof/*'` empty.
+
+**Local tickets*.csv regex proof (throwaway repo, fake only):** `files=$(git ls-files)` then `grep -Ei '(^|/)tickets[^/]*\.csv$'` → **PASS** — matches `tickets_x.csv`, `a/Tickets-1.CSV`; does **not** match `src/tickets_helper.rs`, `data/powerball/draws.csv`.
+
+**actions.lock (before any bump):** file is **absent** from this repo (API 404; not in tree). It is GitHub’s workflow dependency lockfile (GA 2026-10-28): generated by `gh actions-lock`, records verified commits for every `uses:` (direct + transitive) under `.github/workflows/actions.lock`, so tag/branch refs can stay readable while runs use locked SHAs. Our workflows already pin full SHAs in `uses:` lines; we are **not** onboarding a lockfile in Step 5 (nothing to update). Will note if you want `gh actions-lock` as a follow-up.
+
+**Step 5 plan (this window):** (1) R6-04 follow-up: `files=$(git ls-files)` fail-closed in ci refuse step; (2) pin rustc **1.99.1** in ci/update/release (same in all three; ≥1.88, matches verified tip); (3) first Node-24 majors only — checkout@**v5.1.0**, cache@**v5.1.0**, upload-artifact@**v6.0.0**, download-artifact@**v7.0.0** (peeled SHAs + `runs.using: node24` verified); stay off checkout v6+ (credential persistence); (4) pin `windows-latest` → `windows-2022` (and `macos-latest` → `macos-14` per your Step 2 macOS note); (5) `#[cfg(unix)]` on `atomic_write_tests` so release matrix Windows `cargo test` still compiles. No cron / timezone / data edits.

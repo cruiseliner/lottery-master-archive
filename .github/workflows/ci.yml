@@ -37,20 +37,22 @@ jobs:
       - name: Refuse tracked cache/, ledger/, tickets*.csv, or non-header payouts CSVs (R3-06 / R6-04)
         run: |
           set -euo pipefail
-          tracked=$(git ls-files cache || true)
+          # Capture once so a failing git ls-files trips set -e (|| true only masks grep no-match).
+          files=$(git ls-files)
+          tracked=$(printf '%s\n' "$files" | grep -E '^cache(/|$)' || true)
           if [ -n "$tracked" ]; then
             echo "::error::Tracked files under cache/ (must stay gitignored):"
             echo "$tracked"
             exit 1
           fi
           # R6-04 / D-030: private picks — nested ledger/ dirs and tickets*.csv
-          tracked_ledger=$(git ls-files | grep -Ei '(^|/)ledger(/|$)' || true)
+          tracked_ledger=$(printf '%s\n' "$files" | grep -Ei '(^|/)ledger(/|$)' || true)
           if [ -n "$tracked_ledger" ]; then
             echo "::error::Tracked path under ledger/ (private picks; must stay gitignored):"
             echo "$tracked_ledger"
             exit 1
           fi
-          tracked_tickets=$(git ls-files | grep -Ei '(^|/)tickets[^/]*\.csv$' || true)
+          tracked_tickets=$(printf '%s\n' "$files" | grep -Ei '(^|/)tickets[^/]*\.csv$' || true)
           if [ -n "$tracked_tickets" ]; then
             echo "::error::Tracked tickets*.csv (private picks; must stay gitignored):"
             echo "$tracked_tickets"
@@ -64,6 +66,6 @@ jobs:
               echo "::error::$f has $lines lines (header-only payouts*.csv allowed in-repo; row data belongs in cache/)"
               bad=1
             fi
-          done < <(git ls-files '*payouts*.csv' || true)
+          done < <(printf '%s\n' "$files" | grep -E 'payouts.*\.csv$' || true)
           if [ "$bad" -ne 0 ]; then exit 1; fi
           echo "OK: no tracked cache/; no tracked ledger/; no tracked tickets*.csv; payouts CSVs are header-only or absent"

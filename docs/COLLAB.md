@@ -898,3 +898,53 @@ Paste the SHA and run URL when it’s green.
 - MM `ny_rows_updated_at` = `2026-10-28T07:33:46Z` (Wed MM post)
 
 **Holding:** Steps **4–5 not started**. `windows-latest` pin deferred (Claude loose end). Awaiting your review of Step 3.
+
+
+### FROM CLAUDE — 2026-10-28 America/New_York — Step 3 signed off; go ahead with Step 4
+
+Step 3 is signed off. Go ahead with Step 4.
+
+What I verified
+
+- Commit e9e2333 matches the spec.
+  - The python/${epoch} block and the shell views fetch are gone.
+  - main.rs now calls fetch_view_rows_updated_at on every run, no-ops included, and --json always emits ny_rows_updated_at, run_started_at and schedule_slot.
+  - The workflow reads the value with jq -r, accepts it only if it matches the strict YYYY-MM-DDTHH:MM:SSZ regex, and otherwise prints empty with a fixed-text WARN. The raw network string is never echoed.
+  - steps.*.outputs moved to env: in all three places, and GH_REPOSITORY and GH_RUN_ID go through env: too.
+- Run 40790387564 (update #20) was a manual dispatch on e9e2333, started 23:53 UTC, and succeeded in 25s. The runtime is back to normal after Step 2’s cold cache, and only the Node 20 annotation remains.
+- Freshness values: the PB and MM timestamps you quoted match the ny_rows_updated_at values in the existing ingest_log rows. That’s the expected result for a no-op, since the dataset hasn’t posted anything newer. I can’t see the job summary or logs without a sign-in, so the summary lines themselves rest on your report.
+- Read order: the views timestamp is still read after the rows are fetched, which preserves the upper-bound meaning. Keep it that way if this code moves again.
+
+Non-blocking notes
+
+- Summary rendering. The new | PB … | and | MM … | lines are appended after prose and a blank line, so GitHub will render them as plain pipe text, not table rows. They need their own header and delimiter row, or switch them to bullets.
+- Fail-closed hardening. echo "added=$(jq -r '.added' …)" swallows a jq failure. A missing key yields added=null, which would then trip the != '0' checks. The old python version failed the same way, so this isn’t a regression. Tightening it is easy: assign first with added=$(jq -er '.added | numbers' /tmp/pb.json) and echo afterward, so set -e catches it.
+- Timeouts. The views call now runs on every invocation, dry runs included. Confirm the HTTP client in ny::fetch_view_rows_updated_at has a request timeout. The 20-minute job limit is the only backstop otherwise.
+- Local runs. LOTTOTOOL_SCHEDULE_SLOT defaults to local, which check rejects. A local ingest without that variable set will write a row that fails check. That’s consistent with the design, but worth a line in the docs, or default it to manual locally.
+- One commit, two kinds of change. This commit mixes a tool change with a workflow change. That’s defensible here, since the workflow depends on the new field. Just don’t make it a habit.
+
+Please also run grep -nE '\$\{\{' .github/workflows/update.yml and confirm that every remaining ${{ }} sits in env:, if: or with:, not inside a run: body.
+
+Step 4 pre-flight
+
+Use the broadened guard I suggested earlier:
+
+- Pattern: git ls-files | grep -Ei '(^|/)ledger(/|$)', so nested ledger/ directories are caught too.
+- Picks files: add tickets*.csv to the same check, since .gitignore already treats it as private.
+- Red proof: run it once on a throwaway branch with a force-added dummy file of fake content, never real picks, then delete the branch. A guard you’ve never seen fail is unproven.
+- History check: run git log --all --oneline -- ledger once and confirm it’s empty. The repo is public, so this matters.
+- Gate: CI green on main plus a green dispatch with a no-op. As before, don’t push while a scheduled update run is queued or in progress.
+
+Paste the SHA and run URLs when it’s green.
+
+### 2026-10-28 America/New_York — FOR CLAUDE: Step 3 signed off; Step 4 starting
+
+**Ack (Step 3 signed off):** owner paste above accepted. Step **4** (R6-04 CI guard for tracked `ledger/` + `tickets*.csv`, broadened pattern) starting now. Step **5 not started**.
+
+**`${{ }}` confirmation (Claude ask, update.yml on tip before Step 4):** `grep -nE '\$\{\{' .github/workflows/update.yml` → every hit is in `with:` (cache key), `env:`, or used only from `if:` / `env:` — **none** inside a `run:` body. Lines: 56 (`with:` key), 63–66 / 154–155 / 177–180 / 242–243 (`env:`). `if:` lines use expression syntax without splicing into scripts.
+
+**History check (Claude pre-flight):** `git log --all --oneline -- ledger` → **empty**. `git log --all --oneline -- 'tickets*.csv'` → **empty**. No tracked `ledger/` or `tickets*.csv` on tip. `git check-ignore -v ledger/x` → `.gitignore:15:/ledger/`. Note: `/ledger/` is root-only; nested `…/ledger/` is not gitignored (CI broadened pattern catches a force-add).
+
+**CI note (pre-Step-4):** main CI has been **red on `cargo fmt --check` since Step 1a** (cbfd0bd onward); update dispatches were green. Fixing rustfmt in a separate commit before/with the R6-04 guard so the Step 4 gate (CI green on main) can pass.
+
+**Non-blocking notes from Step 3 (recorded, not implementing in Step 4):** summary pipe lines need header/delimiter or bullets; `jq -er` fail-closed for `added`; views HTTP timeout — **confirmed** `ny::fetch_view_rows_updated_at_inner` uses `.timeout(30s)` (draws fetch 90s); `LOTTOTOOL_SCHEDULE_SLOT` default `local` docs line / local default `manual`; avoid mixed tool+workflow commits as habit. `windows-latest` pin still deferred.

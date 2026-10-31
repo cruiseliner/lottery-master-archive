@@ -14,7 +14,7 @@
 | OI-10 | CI | Staleness grace of 30h is based on NY `rowsUpdatedAt` posting ~03:38 ET (~4h39m after the 23:00 ET draw) on two observations (C-19 / D-007). Remaining lag after NY posts is scheduler lateness (Tue 2026-10-27 samples: 5h36m on `17 6` / 5h09m on `17 10`). A slower NY update will turn the run red; that is intended but may be noisy | WATCH |
 | OI-11 | Payouts | The powerball.com parser depends on the HTML structure (`winners-table`, `data-label`, `m{N}-pb` classes). Layout changes make the fetch fail loudly (tested) | WATCH |
 | OI-12 | Relay | `scripts/relay/relay.py` is DRAFTED and NOT RUN against the API; only `--dry-run`, path blocking and the redaction helper were exercised | OPEN |
-| OI-13 | Release | `release.yml` untested on C-21 stack (rustc 1.99.1, upload v6→download v7, windows-2022/macos-14, `cfg(unix)` atomic tests). **Before next real release:** dry run via `workflow_dispatch` if added, or build-only on a branch — **do not** test with a public tag (Claude Step 5 sign-off) | OPEN |
+| OI-13 | Release | `release.yml` untested on C-21 stack (rustc 1.99.1, upload v6→download v7, windows-2022/macos-14, `cfg(unix)` atomic tests). **Before next real release:** dry run via `workflow_dispatch` if added, or build-only on a branch — **do not** test with a public tag (Claude Step 5 sign-off). Re-stated as still unproven in Claude's C-21 sign-off (2026-10-31, paraphrase) | OPEN |
 | OI-14 | Spec | Kickoff spec section 6 was not available to the Phase 1 executor; the build followed the parent's explicit list | VERIFY |
 | OI-15 | Check | Official-source winning-number crosscheck (`--crosscheck N`) | DONE (R-06); keep off schedule |
 | OI-16 | CI | Confirm first real scheduled run starts at 06:17 America/New_York after dual-cron+timezone change | WATCH — as of 2026-10-24 ~08:53 ET, **zero** `event=schedule` runs in Actions (06:17 not yet observed) |
@@ -30,4 +30,5 @@
 | OI-26 | CI | Assign `added=$(jq -er …)` first so `set -e` catches a missing key (Claude Step 5 carry-over) | OPEN |
 | OI-27 | CI | Local pre-push hook running the same cache/ledger/tickets greps as ci.yml (CI only catches after push) | OPEN |
 | OI-28 | CI | Quarterly review of pins: `ubuntu-24.04`, `windows-2022`, `macos-14`, rustc `1.99.1`, and the four Node-24 action SHAs | OPEN |
-| OI-29 | Docs | Commit `f552fef` title still says “6h20m late”; delay-table row 9 correctly says **10h20m** (UTC-cron). Later docs fix only — do not rewrite history. D-027 still UNRESOLVED | OPEN |
+| OI-29 | Docs | Commit `f552fef` title says “6h20m late”, and the delay table had been switched to a UTC-cron 10h20m. **Resolution 2026-10-31:** the original `f552fef` title (6h20m, ET basis) was correct. The `timezone:` key is documented (D-027 resolved), and the delay table is back on the ET basis with the UTC-cron figures marked superseded. No history rewrite | **CLOSED** 2026-10-31 |
+| OI-30 | CI | `update.yml` `data-changes` artifact (upload-artifact v6, gated on `changed != '0'`) has never run: no live run has changed an existing row yet. C-21 sign-off lists it as not exercised. Watch for it on the first run with `~N` > 0; do not force it | WATCH |

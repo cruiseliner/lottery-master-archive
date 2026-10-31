@@ -31,4 +31,13 @@
 | OI-27 | CI | Local pre-push hook running the same cache/ledger/tickets greps as ci.yml (CI only catches after push) | OPEN |
 | OI-28 | CI | Quarterly review of pins: `ubuntu-24.04`, `windows-2022`, `macos-14`, rustc `1.99.1`, and the four Node-24 action SHAs | OPEN |
 | OI-29 | Docs | Commit `f552fef` title says “6h20m late”, and the delay table had been switched to a UTC-cron 10h20m. **Resolution 2026-10-31:** the original `f552fef` title (6h20m, ET basis) was correct. The `timezone:` key is documented (D-027 resolved), and the delay table is back on the ET basis with the UTC-cron figures marked superseded. No history rewrite | **CLOSED** 2026-10-31 |
-| OI-30 | CI | `update.yml` `data-changes` artifact (upload-artifact v6, gated on `changed != '0'`) has never run: no live run has changed an existing row yet. C-21 sign-off lists it as not exercised. Watch for it on the first run with `~N` > 0; do not force it | WATCH |
+| OI-30 | CI | `update.yml` `data-changes` artifact (upload-artifact v6, gated on `changed != '0'`) has never run: no live run has changed an existing row yet. C-21 sign-off lists it as not exercised. Watch for it on the first run with `~N` > 0; do not force it. Re-confirmed not exercised in Claude's C-21 full acceptance (2026-10-31, paraphrase): run 41216216751 (`ca5c01c`, `~0`) produced only `check-report` | WATCH |
+| OI-31 | CI | Post-DST timezone falsification (Claude, C-21 full acceptance 2026-10-31, paraphrase). D-027 is "documented as honored; not yet observed". For 2026-11-01..2026-11-07 (EST, UTC−5), record every scheduled `update` run's `run_started_at` against its bound: `17 6` → **11:17Z** (06:17 EST), `17 10` → **15:17Z** (10:17 EST). **A single run that starts before its bound refutes the honored reading and reopens D-027.** Baseline (pre-DST `17 6` starts vs 10:17Z bound, none before): 2026-10-28 16:37Z, 2026-10-29 16:55Z, 2026-10-30 16:41Z, 2026-10-31 15:43Z. Log table below | WATCH (2026-11-01..07) |
+| OI-32 | CI | A manual-dispatch live ingest (`workflow_dispatch`, `schedule_slot=manual`, with a real data change) has never been exercised; `manual` is only proven in a no-op dispatch. Live ingest is proven only on scheduled runs (`c7f71cc`, `ca5c01c`). Do not force it; record the first one when it happens naturally | OPEN |
+
+### OI-31 post-DST timezone falsification log
+
+Bounds: `17 6` → 11:17Z, `17 10` → 15:17Z. "Before bound?" = `run_started_at` < bound (Yes refutes the honored reading).
+
+| Date (ET) | Slot | Run id | run_started_at (Z) | Bound | Before bound? |
+|-----------|------|--------|--------------------|-------|---------------|

@@ -741,10 +741,11 @@ The gate is a green manual dispatch plus a no-op. The ubuntu-latest will migrate
 | 12 | Thu 2026-10-29 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-29T19:38:17Z (15:38:17 ET) | **5h21m** | ~~9h21m~~ | [40941889280](https://github.com/cruiseliner/lottery-master-archive/actions/runs/40941889280) | no commit (no-op) |
 | 13 | Fri 2026-10-30 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-30T16:41:19Z (12:41:19 ET) | **6h24m** | ~~10h24m~~ | [41092146473](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41092146473) | no commit (no-op) |
 | 14 | Fri 2026-10-30 | `17 10 * * *` | 10:17 | 14:17Z | 2026-10-30T19:22:05Z (15:22:05 ET) | **5h05m** | ~~9h05m~~ | [41114673163](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41114673163) | no commit (no-op) |
+| 15 | Sat 2026-10-31 | `17 6 * * *` | 06:17 | 10:17Z | 2026-10-31T15:43:37Z (11:43:37 ET) | **5h26m** | ~~9h26m~~ | [41216216751](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41216216751) | MM +1 → [`ca5c01c`](https://github.com/cruiseliner/lottery-master-archive/commit/ca5c01cdca014722a17f03ae5ece3e2aaa27c0fb) |
 
 _History:_ rows 9–11 were briefly published on the UTC-cron basis (10h20m / 9h16m / 10h38m), and commit `f552fef`'s title says 6h20m. The title was right (OI-29 closed). The Slot column in rows 9–11 had also been filled with start wall-clock times (12:37 / 15:33 / 02:17) and now shows the real ET slots.
 
-_Trend (ET basis):_ Sat ~3–4h → Sun ~3–4h → Mon 6h30m / 5h39m → Tue 5h35m / 5h09m → Wed 6h20m / 5h16m → Thu 6h38m / 5h21m → Fri 6h24m / 5h05m. The `17 6` slot has run 5.5–6.7h late since Monday.
+_Trend (ET basis):_ Sat ~3–4h → Sun ~3–4h → Mon 6h30m / 5h39m → Tue 5h35m / 5h09m → Wed 6h20m / 5h16m → Thu 6h38m / 5h21m → Fri 6h24m / 5h05m → Sat 5h26m (`17 6`). The `17 6` slot has run 5.4–6.7h late since Monday. Post-DST starts (from 2026-11-01) are logged against their EST bounds in OPEN_ISSUES.md → OI-31.
 
 ### 2026-10-27 ~13:50 America/New_York — FOR CLAUDE: Tuesday new-draw acceptance evidence (PB 2026-10-26)
 
@@ -1233,3 +1234,30 @@ L14 '      timezone: "America/New_York"'-> 'timezone' col 7 (6 spaces)
 In both slots, `timezone:` is a sibling key of `cron:` in the same `- ` list item. That is the same shape as the docs example.
 
 **MM 2026-10-30 pickup:** not landed yet. As of 10:07 ET Sat 2026-10-31 there are no `update` runs today. The latest runs are Fri [41092146473](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41092146473) (`17 6`, 12:41:19 ET, no-op) and [41114673163](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41114673163) (`17 10`, 15:22:05 ET, no-op). At the recent ~5–6.6h lateness, the Sat `17 6` run is expected around 11:30–13:00 ET. Its commit and run URLs will follow when it lands. No manual dispatch.
+
+---
+
+## C-21 FULL ACCEPTANCE (paraphrase relayed by Adam; verbatim FROM CLAUDE pending paste)
+
+_This is not Claude's text. Adam relayed Claude's reply through another assistant (Helmsman), and the points below are that paraphrase. When Adam pastes the verbatim reply, it goes under a FROM CLAUDE heading._
+
+- **C-21 FULLY ACCEPTED.** The second live ingest passes every check.
+- **Claude verified [`ca5c01c`](https://github.com/cruiseliner/lottery-master-archive/commit/ca5c01cdca014722a17f03ae5ece3e2aaa27c0fb) himself:** bot commit on `440f95b`; 4 files, +10/−8; MM draw row 2026-10-30; `ingest_log` row with strict `Z` timestamps on slot `17 6 * * *`; `megamillions/missing.csv` spans 163→164 and 2552→2553 (same pattern as `bd60431`); `meta.json` MM block updated, PB block untouched.
+- **Run [41216216751](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41216216751):** `event=schedule` on `440f95b`, success in 36s, produced only the `check-report` artifact. Lateness 5h26m against 10:17Z (06:17 EDT). Delay table row 15.
+- **Taken from our evidence:** the sha checks and the no-`.#lottotool-tmp.*` check.
+- **Proven twice on scheduled runs** (`c7f71cc` PB, `ca5c01c` MM): atomic writes, the `ingest_log` cron-slot append, the Step 3 summary and commit, checkout v5, cache v5, rustc 1.99.1.
+- **Never exercised with a real ingest:**
+  - a manual dispatch with a real data change (`schedule_slot=manual` is only proven in a no-op) → **OI-32**;
+  - the `data-changes` artifact → **OI-30**;
+  - `release.yml` (needs a dry run) → **OI-13**.
+- **Timezone falsification so far:** pre-DST `17 6` starts were 16:37Z, 16:55Z, 16:41Z and 15:43Z; none before the 10:17Z bound, so nothing refutes the "documented as honored" reading (it is still not observed). From 2026-11-01 to 2026-11-07, log each scheduled run's start against the post-DST bounds: 11:17Z for `17 6`, 15:17Z for `17 10`. A single run that starts before its bound refutes the honored reading → **OI-31** (log table in OPEN_ISSUES.md).
+- **Still open:** OI-24, OI-25, OI-26, the `release.yml` dry run (OI-13), and the optional throwaway-repo live test (not run; only if Adam asks).
+
+## FOR CLAUDE — 2026-10-31 America/New_York: C-21 full acceptance ack
+
+- **Recorded** above as a relayed paraphrase; your verbatim text goes under FROM CLAUDE when Adam pastes it.
+- **Delay table row 15 added** (C-14 section): run 41216216751, `17 6`, 2026-10-31T15:43:37Z (11:43:37 EDT), 5h26m ET basis (superseded UTC basis 9h26m), MM +1 → `ca5c01c`. Recomputed from the API `run_started_at`.
+- **Watch item OI-31 (WATCH):** post-DST timezone falsification log, 2026-11-01..07, bounds 11:17Z / 15:17Z; one run before its bound reopens D-027. The log table lives in `docs/OPEN_ISSUES.md` under "OI-31 post-DST timezone falsification log".
+- **OI-32 (OPEN):** a manual-dispatch live ingest (`schedule_slot=manual` with a real data change) has never been exercised; only a no-op.
+- OI-13, OI-24, OI-25, OI-26 and OI-30 stay open. No dispatch, no cron/timezone/`data/` change.
+- Commit SHA for this docs change follows via Adam.

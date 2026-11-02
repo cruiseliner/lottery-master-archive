@@ -41,3 +41,5 @@ Bounds: `17 6` → 11:17Z, `17 10` → 15:17Z. "Before bound?" = `run_started_at
 
 | Date (ET) | Slot | Run id | run_started_at (Z) | Bound | Before bound? |
 |-----------|------|--------|--------------------|-------|---------------|
+| 2026-11-01 | `17 6 * * *` | [41329789610](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41329789610) | 2026-11-01T17:07:01Z | 11:17Z | No |
+| 2026-11-01 | `17 10 * * *` | [41342811789](https://github.com/cruiseliner/lottery-master-archive/actions/runs/41342811789) | 2026-11-01T19:39:12Z | 15:17Z | No |

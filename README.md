@@ -45,8 +45,9 @@ cargo build --release
 
 A private, append-only ledger for tickets you actually bought, checked against the archive.
 
-> **Not for real tickets yet.** Do not use `grade` on real tickets until the weekly
-> crosscheck (D-025) has been dispatched once on `main` and come back green (OI-20).
+> **Before the first real ticket:** `git check-ignore -v ledger/tickets/tickets.csv` must show
+> `/ledger/`, and `git status --porcelain` must stay empty after the add. Keep a private backup
+> of `ledger/tickets/` outside the repo. (OI-20 closed 2026-11-11: crosscheck green on `main`.)
 
 Example numbers below are synthetic.
 

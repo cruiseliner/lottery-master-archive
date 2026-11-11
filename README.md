@@ -48,6 +48,7 @@ A private, append-only ledger for tickets you actually bought, checked against t
 ```
 lottotool ticket add --game pb --draw-date 2026-11-11 --whites 3,14,22,41,60 --special 9 --power-play [--cost 3] [--note "..."]
 lottotool ticket add --game mm --draw-date 2026-11-13 --whites 7,8,9,10,11 --special 12
+lottotool ticket void T0001 --reason "typo in white ball"
 lottotool ticket list [--game pb] [--draw-date YYYY-MM-DD]
 lottotool grade                     # pending tickets + tickets for each game's latest archived draw
 lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
@@ -59,8 +60,12 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
   path is not gitignored, and fails closed on an unexpected header.
 * `ticket add` validates against `eras.toml` for the draw date: scheduled draw weekday, ball
   ranges, five distinct whites, Power Play only for Powerball, and the price (`price_usd`, plus
-  `power_play_price_usd`). `--cost`, if given, must equal that price. Only eras whose prize
+  `power_play_price_usd`). `--cost`, if given, must equal that price (strict by decision, D-031). Only eras whose prize
   chart is encoded (`pb-2015`, `mm-2025`) are accepted.
+* `ticket void <id> --reason ...` appends a record to `ledger/tickets/tickets_voids.csv`; the
+  ticket row is never changed. Unknown ids and second voids are refused. `ticket list` marks
+  voided tickets `VOID`; `grade` leaves them out. Re-enter a corrected ticket with `ticket add`
+  (it gets a new id).
 * `grade` reports white matches, special-ball match, the tier (e.g. `3+1`), whether it is a
   prize tier on the current chart, and the archive multiplier (Powerball Power Play) when the
   ticket has it and the archive row has a value. A special ball only matches the drawn special
@@ -77,6 +82,9 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
   update both games, integrity gate, commit, then a full check that fails visibly if a due draw
   is missing. There is also a 45-day keep-alive commit, because GitHub disables schedules in
   public repos after 60 days without activity. It can also be run by hand (`workflow_dispatch`).
+* `.github/workflows/crosscheck.yml` runs weekly (Sundays 16:43 America/New_York) and compares
+  the latest 8 archived draws per game with the official winning-number pages. It is read-only;
+  a mismatch fails the run (D-025).
 * `.github/workflows/ci.yml` runs fmt, clippy `-D warnings`, the tests, and the data integrity check.
 * `.github/workflows/release.yml`: on a `v*` tag, it builds a Linux binary and publishes it with `SHA256SUMS`.
 

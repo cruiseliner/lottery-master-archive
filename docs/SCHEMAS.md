@@ -62,6 +62,11 @@ Never committed (R6-04 CI guard refuses tracked `ledger/` and `tickets*.csv`). A
 | cost_usd | Whole USD, equal to the eras.toml price (+ `power_play_price_usd`) |
 | note | Free text, single line |
 
+Void records (PRIVATE: `ledger/tickets/tickets_voids.csv`, append-only, D-031):
+`ticket_id,voided_at,reason`. One row per voided ticket (`voided_at` UTC `Z`). Reading fails
+closed on a wrong header, an unknown `ticket_id`, or a ticket voided twice. Ticket rows are
+never changed; a corrected ticket is a new `tickets.csv` row.
+
 ## ingest_log.csv (`data/ingest_log.csv`)
 
 Appended by `lottotool update` only when a new draw date is added (D-028 / C-08). Not

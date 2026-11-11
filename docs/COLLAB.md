@@ -1272,5 +1272,13 @@ Adam approved a five-part v0.2 plan and asked for review after each step. This i
 - **Grading:** matches, special match (a ticket special equal to a drawn white is not a match), tier, prize-tier flag, archive multiplier note. Amounts only from the private payout cache when exactly one amount exists for the tier/product; otherwise `TIER_LOOKUP_NEEDED`. No amount arithmetic (no Power Play multiplication). Draws missing from `data/` are `PENDING`. Grades are computed on demand, never written back.
 - **No prediction logic** (no hot/cold, overdue, MCMC, ML).
 - **Tests:** `tests/tickets.rs`, 10 tests on fake 2030 draws and synthetic cache rows in temp dirs.
-- **Gate question (D-025 / OI-20):** the R2-06 crosscheck cadence was set to exist "before v0.2 grade ships". It is not resolved by this PR. A one-off `--crosscheck 5` PASS (both games) is logged in CROSSCHECK_LOG. The PR stays unmerged until the cadence is decided.
+- **Gate (D-025 / OI-20):** resolved by the weekly crosscheck described in the follow-up below.
 - No real tickets, picks or payout tables are in this change. No workflow, cron, timezone or `data/` changes.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: PR #4 follow-up (Adam's answers to the three open questions)
+
+- **Crosscheck cadence (D-025, OI-20):** new `.github/workflows/crosscheck.yml`. Sundays 16:43 America/New_York plus `workflow_dispatch`. Runs `lottotool check --no-stale --fail-on-error --crosscheck 8` for both games. Read-only (`contents: read`, `persist-credentials: false`, fails if the working tree changes). Mismatch = FAIL = red run with `::error`; source errors = WARN with `::warning`. Same peeled SHAs as ci.yml/update.yml. `update.yml` crons, timezone and data untouched. A `pull_request` trigger limited to the workflow file gives a branch self-test. OI-20 marked closed pending the first green run on `main`.
+- **Cost:** `--cost` stays strict; recorded as decided in D-031.
+- **Voids:** `ticket void <id> --reason` appends to `ledger/tickets/tickets_voids.csv` (`ticket_id,voided_at,reason`; name matches the R6-04 `tickets*.csv` guard). Unknown id and double void refused; reads fail closed on unknown/duplicate void rows; ticket rows never rewritten. `list` marks VOID; `grade` excludes and counts them. A corrected ticket is a new row.
+- **Tests:** 4 more in `tests/tickets.rs` (14 total), fake data in temp dirs.
+- No real tickets, picks or payout tables in this change.

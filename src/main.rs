@@ -63,7 +63,7 @@ enum Cmd {
         #[arg(long)]
         now: Option<DateTime<Utc>>,
         /// Cross-check the N most recent draws against official winning-number
-        /// sources (local / workflow_dispatch only; do not use on schedule).
+        /// sources (read-only; the weekly `crosscheck.yml` job uses N=8, D-025).
         #[arg(long)]
         crosscheck: Option<usize>,
     },
@@ -146,7 +146,16 @@ enum TicketCmd {
         #[arg(long, default_value = "")]
         note: String,
     },
-    /// List tickets in the private ledger.
+    /// Void a ticket by appending a void record (the ticket row is never changed).
+    /// Re-enter a corrected ticket with `ticket add`; it gets a new id.
+    Void {
+        /// Ticket id, e.g. T0001.
+        ticket_id: String,
+        /// Why the ticket is voided (single line; stays in the private ledger).
+        #[arg(long)]
+        reason: String,
+    },
+    /// List tickets in the private ledger (voided tickets are marked VOID).
     List {
         #[arg(long)]
         game: Option<Game>,
@@ -657,18 +666,46 @@ fn run_ticket(cli: &Cli, eras: &ErasFile, cmd: &TicketCmd) -> Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
+        TicketCmd::Void { ticket_id, reason } => {
+            let v = tickets::void(&cli.root, ticket_id, reason, Utc::now())?;
+            if cli.json {
+                println!(
+                    "{}",
+                    json!({"ok": true, "void": v, "ledger": "private (gitignored)"})
+                );
+            } else {
+                println!(
+                    "voided {} at {} (reason: {}); ticket row unchanged",
+                    v.ticket_id, v.voided_at, v.reason
+                );
+                println!(
+                    "void log: {} (gitignored; append-only)",
+                    tickets::voids_path(&cli.root).display()
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         TicketCmd::List { game, draw_date } => {
+            let voids = tickets::read_voids(&cli.root)?;
             let rows: Vec<_> = tickets::read_ledger(&cli.root)?
                 .into_iter()
                 .filter(|r| game.is_none_or(|g| r.game == g.id()))
                 .filter(|r| draw_date.is_none_or(|d| r.draw_date == d))
                 .collect();
+            let void_of = |id: &str| voids.iter().find(|v| v.ticket_id == id);
             if cli.json {
-                println!("{}", json!({"ok": true, "tickets": rows}));
+                let out: Vec<_> = rows
+                    .iter()
+                    .map(|r| json!({"ticket": r, "void": void_of(&r.ticket_id)}))
+                    .collect();
+                println!("{}", json!({"ok": true, "tickets": out}));
             } else {
                 for r in &rows {
+                    let void_tag = void_of(&r.ticket_id)
+                        .map(|v| format!("  [VOID {}: {}]", v.voided_at, v.reason))
+                        .unwrap_or_default();
                     println!(
-                        "{} {:12} {} whites {} {} {}{} ${}{}",
+                        "{} {:12} {} whites {} {} {}{} ${}{}{}",
                         r.ticket_id,
                         r.game,
                         r.draw_date,
@@ -681,10 +718,15 @@ fn run_ticket(cli: &Cli, eras: &ErasFile, cmd: &TicketCmd) -> Result<ExitCode> {
                             String::new()
                         } else {
                             format!("  # {}", r.note)
-                        }
+                        },
+                        void_tag
                     );
                 }
-                println!("{} ticket(s)", rows.len());
+                let nvoid = rows
+                    .iter()
+                    .filter(|r| void_of(&r.ticket_id).is_some())
+                    .count();
+                println!("{} ticket(s), {nvoid} voided", rows.len());
             }
             Ok(ExitCode::SUCCESS)
         }
@@ -698,7 +740,21 @@ fn run_grade(
     draw_date: Option<NaiveDate>,
     all: bool,
 ) -> Result<ExitCode> {
-    let ledger = tickets::read_ledger(&cli.root)?;
+    let voids = tickets::read_voids(&cli.root)?;
+    let all_rows = tickets::read_ledger(&cli.root)?;
+    let mut voided_excluded = 0usize;
+    let ledger: Vec<_> = all_rows
+        .into_iter()
+        .filter(|t| {
+            let v = voids.iter().any(|v| v.ticket_id == t.ticket_id);
+            let in_scope =
+                game.is_none_or(|g| t.game == g.id()) && draw_date.is_none_or(|d| t.draw_date == d);
+            if v && in_scope {
+                voided_excluded += 1;
+            }
+            !v
+        })
+        .collect();
     let mut grades = Vec::new();
     for gm in Game::all() {
         if game.is_some_and(|g| g != gm) {
@@ -733,7 +789,7 @@ fn run_grade(
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({"ok": true, "grades": grades,
-                "graded": grades.len() - pending, "pending": pending, "prize_tier_hits": prize_hits,
+                "graded": grades.len() - pending, "pending": pending, "prize_tier_hits": prize_hits, "voided_excluded": voided_excluded,
                 "note": "computed on demand; nothing written to the ledger"}))?
         );
         return Ok(ExitCode::SUCCESS);
@@ -784,10 +840,11 @@ fn run_grade(
         }
     }
     println!(
-        "{} graded, {} pending, {} in a prize tier",
+        "{} graded, {} pending, {} in a prize tier, {} voided excluded",
         grades.len() - pending,
         pending,
-        prize_hits
+        prize_hits,
+        voided_excluded
     );
     Ok(ExitCode::SUCCESS)
 }

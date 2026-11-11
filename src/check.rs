@@ -39,7 +39,7 @@ pub struct Options {
     /// Override "now" (tests / reproducibility).
     pub now: Option<DateTime<Utc>>,
     /// When set, cross-check the N most recent draws per game against official
-    /// winning-number pages (local / workflow_dispatch only; never on schedule).
+    /// winning-number pages (read-only; local, or the weekly `crosscheck.yml` job per D-025).
     pub crosscheck: Option<usize>,
 }
 

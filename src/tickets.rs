@@ -33,6 +33,24 @@ pub fn ledger_path(root: &Path) -> PathBuf {
     root.join("ledger").join("tickets").join("tickets.csv")
 }
 
+pub const VOIDS_HEADER: &str = "ticket_id,voided_at,reason";
+
+/// Append-only void records (D-031). Named `tickets*.csv` so the R6-04 guard also matches it.
+pub fn voids_path(root: &Path) -> PathBuf {
+    root.join("ledger")
+        .join("tickets")
+        .join("tickets_voids.csv")
+}
+
+/// One void record: marks an existing ticket row as voided without touching it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoidRow {
+    pub ticket_id: String,
+    /// UTC, RFC 3339 with `Z`.
+    pub voided_at: String,
+    pub reason: String,
+}
+
 /// One row of the private ticket ledger.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TicketRow {
@@ -168,19 +186,95 @@ pub fn validate(g: &GameDef, t: &NewTicket) -> Result<(String, u32)> {
 /// Read the ledger, failing closed on a wrong header or unparseable row.
 /// A missing file is an empty ledger.
 pub fn read_ledger(root: &Path) -> Result<Vec<TicketRow>> {
-    let p = ledger_path(root);
+    read_checked(&ledger_path(root), TICKETS_HEADER)
+}
+
+/// Read void records, failing closed on a wrong header, an unknown ticket id, or a duplicate.
+pub fn read_voids(root: &Path) -> Result<Vec<VoidRow>> {
+    let voids: Vec<VoidRow> = read_checked(&voids_path(root), VOIDS_HEADER)?;
+    if voids.is_empty() {
+        return Ok(voids);
+    }
+    let tickets = read_ledger(root)?;
+    let mut seen = std::collections::HashSet::new();
+    for v in &voids {
+        if !tickets.iter().any(|t| t.ticket_id == v.ticket_id) {
+            bail!("void record references unknown ticket {}", v.ticket_id);
+        }
+        if !seen.insert(v.ticket_id.clone()) {
+            bail!("ticket {} is voided more than once", v.ticket_id);
+        }
+    }
+    Ok(voids)
+}
+
+fn read_checked<T: for<'de> Deserialize<'de>>(p: &Path, expected: &str) -> Result<Vec<T>> {
     if !p.exists() {
         return Ok(Vec::new());
     }
-    let text = std::fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?;
+    let text = std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
     let header = text.lines().next().unwrap_or("").trim_end_matches('\r');
-    if header != TICKETS_HEADER {
+    if header != expected {
         bail!(
             "{}: unexpected header (refusing to read or append): {header:?}",
             p.display()
         );
     }
-    read_csv(&p)
+    read_csv(p)
+}
+
+/// Append raw CSV bytes (header first if the file is new) with an append-only open.
+fn append_record<T: Serialize>(path: &Path, header: &str, row: &T) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let new_file = !path.exists();
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .with_context(|| format!("opening {} for append", path.display()))?;
+    let mut w = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(Vec::new());
+    if new_file {
+        w.write_record(header.split(','))?;
+    }
+    w.serialize(row)?;
+    let bytes = w.into_inner().map_err(|e| anyhow!("csv: {e}"))?;
+    f.write_all(&bytes)?;
+    f.flush()?;
+    f.sync_all()?;
+    Ok(())
+}
+
+/// Void a ticket by appending a record to `tickets_voids.csv`. The ticket row is never touched.
+/// Refuses an unknown id, an already-voided id, and an empty or multi-line reason.
+pub fn void(root: &Path, ticket_id: &str, reason: &str, now: DateTime<Utc>) -> Result<VoidRow> {
+    let reason = reason.trim();
+    if reason.is_empty() {
+        bail!("--reason is required");
+    }
+    if reason.contains('\n') || reason.contains('\r') {
+        bail!("--reason must be a single line");
+    }
+    let tickets = read_ledger(root)?;
+    if !tickets.iter().any(|t| t.ticket_id == ticket_id) {
+        bail!("no ticket {ticket_id} in the ledger");
+    }
+    let voids = read_voids(root)?;
+    if let Some(v) = voids.iter().find(|v| v.ticket_id == ticket_id) {
+        bail!("ticket {ticket_id} is already voided ({})", v.voided_at);
+    }
+    let path = voids_path(root);
+    ensure_gitignored(root, &path)?;
+    let row = VoidRow {
+        ticket_id: ticket_id.to_string(),
+        voided_at: now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        reason: reason.to_string(),
+    };
+    append_record(&path, VOIDS_HEADER, &row)?;
+    Ok(row)
 }
 
 /// Refuse to write the ledger if `root` is a git work tree and the ledger path is not ignored.
@@ -230,26 +324,7 @@ pub fn append(root: &Path, g: &GameDef, t: &NewTicket, now: DateTime<Utc>) -> Re
         cost_usd: cost,
         note: t.note.clone(),
     };
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-    }
-    let new_file = !path.exists();
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .with_context(|| format!("opening {} for append", path.display()))?;
-    let mut w = csv::WriterBuilder::new()
-        .has_headers(false)
-        .from_writer(Vec::new());
-    if new_file {
-        w.write_record(TICKETS_HEADER.split(','))?;
-    }
-    w.serialize(&row)?;
-    let bytes = w.into_inner().map_err(|e| anyhow!("csv: {e}"))?;
-    f.write_all(&bytes)?;
-    f.flush()?;
-    f.sync_all()?;
+    append_record(&path, TICKETS_HEADER, &row)?;
     Ok(row)
 }
 

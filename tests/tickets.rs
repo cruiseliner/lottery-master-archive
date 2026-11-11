@@ -5,8 +5,8 @@ use lottotool::Game;
 use lottotool::data::{Draw, PayoutRow};
 use lottotool::eras::{ErasFile, GameDef};
 use lottotool::tickets::{
-    GradeStatus, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, append, grade, ledger_path,
-    lookup_prize, read_ledger, validate,
+    GradeStatus, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, VOIDS_HEADER, append, grade,
+    ledger_path, lookup_prize, read_ledger, read_voids, validate, void, voids_path,
 };
 use std::path::{Path, PathBuf};
 
@@ -368,5 +368,100 @@ fn entered_after_draw_is_flagged() {
     let t = append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), late).unwrap();
     let gr = grade(&g, &t, &[], &[]).unwrap();
     assert!(gr.entered_after_draw);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// ------------------------------------------------------------------ voids
+
+#[test]
+fn void_appends_record_and_never_mutates_ticket_rows() {
+    let root = tmp_root("void");
+    let g = game("powerball");
+    let a = append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    let ledger_before = std::fs::read(ledger_path(&root)).unwrap();
+
+    let v = void(&root, "T0001", "typo in white ball", before_draw()).unwrap();
+    assert_eq!(v.ticket_id, "T0001");
+    assert_eq!(v.voided_at, "2030-01-02T15:00:00Z");
+    assert_eq!(
+        std::fs::read(ledger_path(&root)).unwrap(),
+        ledger_before,
+        "ticket rows untouched"
+    );
+    let vtext = std::fs::read_to_string(voids_path(&root)).unwrap();
+    assert!(vtext.starts_with(VOIDS_HEADER));
+    assert!(
+        voids_path(&root)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("tickets")
+    );
+
+    // Corrected ticket is a new row with a new id; original row still present and unchanged.
+    let b = append(&root, &g, &pb(&[1, 2, 3, 4, 6], 6, false), before_draw()).unwrap();
+    assert_eq!(b.ticket_id, "T0002");
+    let after = std::fs::read(ledger_path(&root)).unwrap();
+    assert_eq!(&after[..ledger_before.len()], &ledger_before[..]);
+    assert_eq!(read_ledger(&root).unwrap(), vec![a, b]);
+    assert_eq!(read_voids(&root).unwrap(), vec![v]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn void_unknown_id_fails_and_writes_nothing() {
+    let root = tmp_root("void-unknown");
+    let g = game("powerball");
+    append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    let e = void(&root, "T0099", "nope", before_draw()).unwrap_err();
+    assert!(e.to_string().contains("no ticket T0099"), "{e}");
+    assert!(!voids_path(&root).exists());
+    // Empty reason refused too.
+    assert!(void(&root, "T0001", "  ", before_draw()).is_err());
+    assert!(!voids_path(&root).exists());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn double_void_is_refused_and_log_unchanged() {
+    let root = tmp_root("void-double");
+    let g = game("powerball");
+    append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    void(&root, "T0001", "first", before_draw()).unwrap();
+    let before = std::fs::read(voids_path(&root)).unwrap();
+    let e = void(&root, "T0001", "second", before_draw()).unwrap_err();
+    assert!(e.to_string().contains("already voided"), "{e}");
+    assert_eq!(std::fs::read(voids_path(&root)).unwrap(), before);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn hand_edited_void_log_fails_closed() {
+    let root = tmp_root("void-corrupt");
+    let g = game("powerball");
+    append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    std::fs::write(
+        voids_path(&root),
+        format!("{VOIDS_HEADER}\nT0042,2030-01-02T15:00:00Z,ghost\n"),
+    )
+    .unwrap();
+    assert!(
+        read_voids(&root)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown ticket")
+    );
+    std::fs::write(
+        voids_path(&root),
+        format!("{VOIDS_HEADER}\nT0001,2030-01-02T15:00:00Z,a\nT0001,2030-01-02T15:00:01Z,b\n"),
+    )
+    .unwrap();
+    assert!(
+        read_voids(&root)
+            .unwrap_err()
+            .to_string()
+            .contains("more than once")
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

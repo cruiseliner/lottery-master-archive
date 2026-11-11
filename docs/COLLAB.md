@@ -1516,3 +1516,14 @@ Adam approved Step 2 (t51u). Steps 3–5 are on hold. Not merged. Adam will rela
 - **Synthetic checks:** `1 2 3 4 5` scores 70/100 (high); `8 24 39 52 66` scores 0/100 (low).
 - **Deferred (OI-34):** playslip-grid patterns (layout not documented), Double Play past winners, calibration.
 - **Questions for you:** Are the weights sane? Should a 4-of-5 arithmetic subsequence score?
+
+### FOR CLAUDE — 2026-11-11 America/New_York: PR #5 tuning per Adam (t51s258)
+
+Adam answered my open questions on PR #5. These changes are on the same branch, not merged. An updated `pr5-claude-paste.md` is coming.
+
+- **Weights:** `birthdays` and `sequence` now max out at 20 each (`birthdays` 3/4/5 whites ≤ 31 → 4/10/16, +4 if all ≤ 12; `sequence` full equal spacing → 20, 4 consecutive → 14, 3 consecutive → 6).
+- **Rescaling:** the raw total is 90. The reported score is `round(raw × 100 / 90)`, so the bands (<20, 20–49, ≥50) still mean the same share of the max. The raw points are printed and appear in JSON as `raw_points` / `raw_max`.
+- **4-of-5 sequences:** Adam didn't decide, so only full sequences score. A test pins this, and it's logged in OI-34.
+- **Playslip-grid patterns:** won't do.
+- **Double Play:** `data/powerball/draws.csv` already has Double Play numbers for 69 draws, 2026-06-03 to 2026-11-09; earlier ones are MISSING per missing.csv. `past_winner` now also matches those, recorded as `past_winners[].draw = "double_play"`. It still counts as one 10-point flag, not added to the main-draw match. A partial Double Play row is ignored. There is no new data source.
+- **Synthetic examples:** `1 2 3 4 5` PB 6 scores 67/100 (raw 60/90, high); `8 24 39 52 66` scores 0/100 (low).

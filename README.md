@@ -111,25 +111,26 @@ lottotool --json crowd --game mm --whites 9,26,38,55,67      # synthetic example
 lottotool crowd --ticket T0001                               # a ticket from your private ledger
 ```
 
-Output is a 0–100 score (low < 20, medium 20–49, high ≥ 50) with one line per factor:
+Output is a 0–100 score (low < 20, medium 20–49, high ≥ 50) with one line per factor. The
+factor points add up to at most 90, and the score is rescaled: `score = round(raw × 100 / 90)`,
+so the bands keep the same meaning as a share of the maximum. The raw points are printed too.
 
 | Factor | Max | Rule | Basis |
 |--------|-----|------|-------|
-| `birthdays` | 25 | whites ≤ 31: 3 → 5, 4 → 12, 5 → 20; +5 if all ≤ 12 | Wang et al. 2016 (direction) |
-| `sequence` | 25 | all five equally spaced → 25; else 4 consecutive → 18, 3 → 8 | Wang et al. 2016 (direction) |
+| `birthdays` | 20 | whites ≤ 31: 3 → 4, 4 → 10, 5 → 16; +4 if all ≤ 12 | Wang et al. 2016 (direction) |
+| `sequence` | 20 | all five equally spaced → 20; else 4 consecutive → 14, 3 → 6 (4-of-5 equal spacing not scored) | Wang et al. 2016 (direction) |
 | `same_decade` | 10 | all five in one decade (1–9, 10–19, …) | judgment |
 | `last_digit` | 10 | 5 share a last digit → 10, 4 → 5 | judgment |
 | `lucky_numbers` | 10 | 3 per 7 or 11 (whites or special), max 6; +4 if ≥ 4 whites are multiples of 5 | Wang et al. 2016 (7); judgment (11, multiples of 5) |
 | `low_sum` | 10 | white sum < 50 % of the uniform mean k(n+1)/2 → 10, < 70 % → 5 | Wang et al. 2016 (low numbers); judgment (thresholds) |
-| `past_winner` | 10 | the same five whites were drawn before (any era in `data/`) | judgment; popularity only, odds unchanged |
+| `past_winner` | 10 | the same five whites were drawn before: main draw (any era in `data/`) or Powerball Double Play (in `data/` only from 2026-06-03; earlier Double Play is MISSING) | judgment; popularity only, odds unchanged |
 
-Synthetic examples: `1 2 3 4 5` scores 70/100 (high); `8 24 39 52 66` scores 0/100 (low).
+Synthetic examples: `1 2 3 4 5` PB 6 scores 67/100 (raw 60/90, high); `8 24 39 52 66` scores 0/100 (low).
 The point values are judgment. "Basis" only says which *direction* comes from published
 research (Wang, Potter van Loon, van den Assem & van Dolder, "Number preferences in lotteries",
 *Judgment and Decision Making* 11(3), 2016, Dutch Lotto 6/45 and a casino game, not US games).
 No draw frequency, hot/cold, overdue or other prediction signal is used; the archive is read
-only for the exact-past-winner check. Playslip-grid patterns are not scored (layout not
-documented here; OI-34).
+only for the exact-past-winner check. Playslip-grid patterns are not scored (won't do, Adam 2026-11-11).
 
 ## Automation
 

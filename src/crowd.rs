@@ -19,8 +19,16 @@ pub const DISCLAIMER: &str = "This does NOT make a ticket likelier to win: every
 The score only aims to lower the chance of splitting a jackpot with other players if this combination wins. \
 Heuristic weights (judgment), not measured player data.";
 
-/// Maximum total score (sum of factor maxima).
+/// Reported score range: 0..=100. Raw factor points (max [`RAW_MAX`]) are rescaled,
+/// `score = round(raw * 100 / RAW_MAX)`, so the bands keep their meaning as a share of the max.
 pub const MAX_SCORE: u32 = 100;
+/// Sum of factor maxima (Adam t51s258: birthdays and sequence lowered to 20 each).
+pub const RAW_MAX: u32 = 90;
+
+/// Rescale raw points to 0..=100, rounding half up.
+pub fn rescale(raw: u32) -> u32 {
+    (raw.min(RAW_MAX) * MAX_SCORE + RAW_MAX / 2) / RAW_MAX
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Factor {
@@ -38,13 +46,24 @@ pub struct CrowdReport {
     pub era_id: String,
     pub whites: [u32; 5],
     pub special: Option<u32>,
+    /// Rescaled 0..=100 (see [`rescale`]).
     pub score: u32,
     pub max_score: u32,
+    /// Sum of factor points before rescaling, out of `raw_max`.
+    pub raw_points: u32,
+    pub raw_max: u32,
     pub band: &'static str,
     pub factors: Vec<Factor>,
-    /// Dates where these exact five whites were drawn (popularity concern only).
-    pub past_winner_dates: Vec<NaiveDate>,
+    /// Archived draws (main or Double Play) with these exact five whites (popularity only).
+    pub past_winners: Vec<PastWinner>,
     pub disclaimer: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PastWinner {
+    pub draw_date: NaiveDate,
+    /// "main" or "double_play" (Powerball Double Play; in `data/` only from 2026-06-03).
+    pub draw: &'static str,
 }
 
 const WANG: &str = "Wang et al. 2016";
@@ -86,9 +105,9 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 /// Dates, months, birthdays: whites of 31 or below (and all 12 or below).
 fn birthdays(w: &[u32; 5]) -> Factor {
     let k = w.iter().filter(|&&x| x <= 31).count();
-    let base = [0, 0, 0, 5, 12, 20][k];
+    let base = [0, 0, 0, 4, 10, 16][k];
     let months = w.iter().all(|&x| x <= 12);
-    let points = base + if months { 5 } else { 0 };
+    let points = base + if months { 4 } else { 0 };
     let mut reason = format!("{} of 5 whites are 31 or below (dates/birthdays)", k);
     if months {
         reason.push_str("; all 12 or below (months)");
@@ -96,7 +115,7 @@ fn birthdays(w: &[u32; 5]) -> Factor {
     Factor {
         id: "birthdays",
         points,
-        max: 25,
+        max: 20,
         reason,
         basis: WANG,
     }
@@ -113,13 +132,13 @@ fn sequence(w: &[u32; 5]) -> Factor {
     let arithmetic = w.windows(2).all(|p| p[1] - p[0] == step);
     let (points, reason) = if arithmetic {
         (
-            25,
+            20,
             format!("all five equally spaced (step {step}): a numeric sequence"),
         )
     } else {
         match best {
-            4 => (18, "4 consecutive numbers".to_string()),
-            3 => (8, "3 consecutive numbers".to_string()),
+            4 => (14, "4 consecutive numbers".to_string()),
+            3 => (6, "3 consecutive numbers".to_string()),
             _ => (
                 0,
                 "no run of 3+ consecutive numbers, not equally spaced".to_string(),
@@ -129,7 +148,7 @@ fn sequence(w: &[u32; 5]) -> Factor {
     Factor {
         id: "sequence",
         points,
-        max: 25,
+        max: 20,
         reason,
         basis: WANG,
     }
@@ -224,40 +243,58 @@ fn low_sum(era: &Era, w: &[u32; 5]) -> Factor {
     }
 }
 
-/// Exact repeat of a past drawn combination (five whites). Popularity concern only: some players
-/// replay past winners; a past winner has the same odds as any other combination.
-fn past_winner(w: &[u32; 5], draws: &[Draw]) -> (Factor, Vec<NaiveDate>) {
-    let dates: Vec<NaiveDate> = draws
-        .iter()
-        .filter(|d| {
-            let mut x = d.whites();
-            x.sort_unstable();
-            x == *w
-        })
-        .map(|d| d.draw_date)
-        .collect();
+/// Exact repeat of a past drawn combination (five whites), in the main draw or, for Powerball,
+/// the Double Play draw. Popularity concern only: some players replay past winners; a past winner
+/// has the same odds as any other combination. Double Play numbers exist in `data/` only from
+/// 2026-06-03 (2021-08-23..2026-06-01 is MISSING), so older Double Play repeats are not found.
+fn past_winner(w: &[u32; 5], draws: &[Draw]) -> (Factor, Vec<PastWinner>) {
+    let same = |mut x: [u32; 5]| {
+        x.sort_unstable();
+        x == *w
+    };
+    let mut hits = Vec::new();
+    for d in draws {
+        if same(d.whites()) {
+            hits.push(PastWinner {
+                draw_date: d.draw_date,
+                draw: "main",
+            });
+        }
+        if let Some((dp, _)) = d.dp()
+            && same(dp)
+        {
+            hits.push(PastWinner {
+                draw_date: d.draw_date,
+                draw: "double_play",
+            });
+        }
+    }
+    let dp_checked = draws.iter().filter(|d| d.dp().is_some()).count();
     let f = Factor {
         id: "past_winner",
-        points: if dates.is_empty() { 0 } else { 10 },
+        points: if hits.is_empty() { 0 } else { 10 },
         max: 10,
-        reason: if dates.is_empty() {
+        reason: if hits.is_empty() {
             format!(
-                "not a past drawn combination ({} archived draws checked)",
-                draws.len()
+                "not a past drawn combination ({} main draws, all eras, and {} Double Play draws checked)",
+                draws.len(),
+                dp_checked
             )
         } else {
             format!(
-                "same five whites as the draw on {} (popularity concern only; odds unchanged)",
-                dates
-                    .iter()
-                    .map(|d| d.to_string())
+                "same five whites as {} (popularity concern only; odds unchanged)",
+                hits.iter()
+                    .map(|h| match h.draw {
+                        "double_play" => format!("the Double Play draw on {}", h.draw_date),
+                        _ => format!("the draw on {}", h.draw_date),
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             )
         },
         basis: JUDGMENT,
     };
-    (f, dates)
+    (f, hits)
 }
 
 pub fn band(score: u32) -> &'static str {
@@ -269,7 +306,7 @@ pub fn band(score: u32) -> &'static str {
 }
 
 /// Score one combination. `draws` are the archived draws for the same game, used only for the
-/// exact-past-winner check.
+/// exact-past-winner check (main and Double Play numbers).
 pub fn score(
     game: &str,
     era: &Era,
@@ -278,7 +315,7 @@ pub fn score(
     draws: &[Draw],
 ) -> Result<CrowdReport> {
     let w = validate(era, whites, special)?;
-    let (pw, past_winner_dates) = past_winner(&w, draws);
+    let (pw, past_winners) = past_winner(&w, draws);
     let factors = vec![
         birthdays(&w),
         sequence(&w),
@@ -288,8 +325,9 @@ pub fn score(
         low_sum(era, &w),
         pw,
     ];
-    debug_assert_eq!(factors.iter().map(|f| f.max).sum::<u32>(), MAX_SCORE);
-    let score = factors.iter().map(|f| f.points).sum::<u32>().min(MAX_SCORE);
+    debug_assert_eq!(factors.iter().map(|f| f.max).sum::<u32>(), RAW_MAX);
+    let raw_points = factors.iter().map(|f| f.points).sum::<u32>();
+    let score = rescale(raw_points);
     Ok(CrowdReport {
         game: game.to_string(),
         era_id: era.id.clone(),
@@ -297,9 +335,11 @@ pub fn score(
         special,
         score,
         max_score: MAX_SCORE,
+        raw_points,
+        raw_max: RAW_MAX,
         band: band(score),
         factors,
-        past_winner_dates,
+        past_winners,
         disclaimer: DISCLAIMER,
     })
 }

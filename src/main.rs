@@ -690,14 +690,16 @@ fn run_crowd(
         None => String::new(),
     };
     println!(
-        "crowd score {}/{} ({}) for {} whites {}{} (era {})",
+        "crowd score {}/{} ({}) for {} whites {}{} (era {}; raw {}/{} factor points, rescaled)",
         r.score,
         r.max_score,
         r.band.to_uppercase(),
         r.game,
         fmt_balls(&r.whites),
         sp,
-        r.era_id
+        r.era_id,
+        r.raw_points,
+        r.raw_max
     );
     for f in &r.factors {
         println!(

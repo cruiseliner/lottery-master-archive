@@ -311,7 +311,9 @@ fn crowd_prints_breakdown_and_disclaimer_in_text_and_json() {
     let (out, err) = text(&o);
     assert!(o.status.success(), "{out}\n{err}");
     assert!(
-        out.starts_with("crowd score 70/100 (HIGH) for powerball whites 1 2 3 4 5 PB 6"),
+        out.starts_with(
+            "crowd score 67/100 (HIGH) for powerball whites 1 2 3 4 5 PB 6 (era pb-2015; raw 60/90"
+        ),
         "{out}"
     );
     for id in [
@@ -346,6 +348,8 @@ fn crowd_prints_breakdown_and_disclaimer_in_text_and_json() {
     let v: serde_json::Value = serde_json::from_str(out.trim()).unwrap();
     assert_eq!(v["crowd"]["score"], 0);
     assert_eq!(v["crowd"]["band"], "low");
+    assert_eq!(v["crowd"]["raw_max"], 90);
+    assert!(v["crowd"]["past_winners"].as_array().unwrap().is_empty());
     assert_eq!(v["weights"], "judgment");
     assert!(
         v["crowd"]["disclaimer"]
@@ -384,7 +388,7 @@ fn crowd_scores_a_ledger_ticket_by_id() {
     let (out, err) = text(&o);
     assert!(o.status.success(), "{out}\n{err}");
     assert!(
-        out.contains("for megamillions whites 10 20 30 40 50 MB 7 (era mm-2025)"),
+        out.contains("crowd score 46/100 (MEDIUM) for megamillions whites 10 20 30 40 50 MB 7 (era mm-2025; raw 41/90"),
         "{out}"
     );
     assert!(

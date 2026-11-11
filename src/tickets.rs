@@ -212,6 +212,8 @@ fn read_checked<T: for<'de> Deserialize<'de>>(p: &Path, expected: &str) -> Resul
     if !p.exists() {
         return Ok(Vec::new());
     }
+    // A partial last line (crash mid-append) fails closed on every read, not just on append.
+    ensure_ends_with_newline(p)?;
     let text = std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
     let header = text.lines().next().unwrap_or("").trim_end_matches('\r');
     if header != expected {
@@ -223,12 +225,31 @@ fn read_checked<T: for<'de> Deserialize<'de>>(p: &Path, expected: &str) -> Resul
     read_csv(p)
 }
 
-/// Append raw CSV bytes (header first if the file is new) with an append-only open.
+/// Refuse to append to a file whose last line is incomplete (e.g. a crash mid-write), so a new
+/// row can never be glued onto a partial one. Empty / missing files are fine.
+pub fn ensure_ends_with_newline(path: &Path) -> Result<()> {
+    match std::fs::read(path) {
+        Ok(b) if !b.is_empty() && b.last() != Some(&b'\n') => bail!(
+            "{} does not end in a newline (partial last line?); refusing to append. \
+             Inspect and repair the private file by hand",
+            path.display()
+        ),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
+/// Append one CSV record (header first if the file is new) with an append-only open:
+/// newline check first, then the whole record in ONE `write_all`, then `sync_all` (fsync).
 fn append_record<T: Serialize>(path: &Path, header: &str, row: &T) -> Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
-    let new_file = !path.exists();
+    ensure_ends_with_newline(path)?;
+    let new_file = std::fs::metadata(path)
+        .map(|m| m.len() == 0)
+        .unwrap_or(true);
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -242,9 +263,10 @@ fn append_record<T: Serialize>(path: &Path, header: &str, row: &T) -> Result<()>
     }
     w.serialize(row)?;
     let bytes = w.into_inner().map_err(|e| anyhow!("csv: {e}"))?;
-    f.write_all(&bytes)?;
-    f.flush()?;
-    f.sync_all()?;
+    f.write_all(&bytes)
+        .with_context(|| format!("appending to {}", path.display()))?;
+    f.sync_all()
+        .with_context(|| format!("fsync {}", path.display()))?;
     Ok(())
 }
 
@@ -301,8 +323,24 @@ fn ensure_gitignored(root: &Path, path: &Path) -> Result<()> {
 }
 
 /// Validate and append one ticket. Existing bytes are never rewritten (append-only open).
-pub fn append(root: &Path, g: &GameDef, t: &NewTicket, now: DateTime<Utc>) -> Result<TicketRow> {
+/// Refuses a draw that is already in the archive (`draws`), so results can't be back-filled.
+/// After the sales cutoff but before the draw is archived the ticket is accepted and shows
+/// as LATE_ENTRY (D-030 / D-031).
+pub fn append(
+    root: &Path,
+    g: &GameDef,
+    t: &NewTicket,
+    draws: &[Draw],
+    now: DateTime<Utc>,
+) -> Result<TicketRow> {
     let (era_id, cost) = validate(g, t)?;
+    if draws.iter().any(|d| d.draw_date == t.draw_date) {
+        bail!(
+            "{} {} is already in the archive (data/); refusing a back-dated ticket (D-030 / D-031)",
+            g.name,
+            t.draw_date
+        );
+    }
     let existing = read_ledger(root)?;
     let path = ledger_path(root);
     ensure_gitignored(root, &path)?;
@@ -328,15 +366,39 @@ pub fn append(root: &Path, g: &GameDef, t: &NewTicket, now: DateTime<Utc>) -> Re
     Ok(row)
 }
 
-/// Official draw instant (draw_time_et on draw_date, America/New_York) in UTC.
-pub fn draw_instant(g: &GameDef, date: NaiveDate) -> Result<DateTime<Utc>> {
-    let t = NaiveTime::parse_from_str(&g.draw_time_et, "%H:%M")
-        .with_context(|| format!("draw_time_et {:?}", g.draw_time_et))?;
+/// Ledger sales cutoff, 22:00 America/New_York on the draw date (D-030; the owner's rule, used
+/// for both games; actual retailer cutoffs vary by state).
+pub const SALES_CUTOFF_ET: (u32, u32) = (22, 0);
+
+pub fn sales_cutoff(date: NaiveDate) -> Result<DateTime<Utc>> {
+    let t = NaiveTime::from_hms_opt(SALES_CUTOFF_ET.0, SALES_CUTOFF_ET.1, 0).expect("valid");
     chrono_tz::America::New_York
         .from_local_datetime(&date.and_time(t))
         .single()
         .map(|d| d.with_timezone(&Utc))
-        .ok_or_else(|| anyhow!("ambiguous draw time {date} {t}"))
+        .ok_or_else(|| anyhow!("ambiguous cutoff {date} {t}"))
+}
+
+fn parse_utc(s: &str, what: &str) -> Result<DateTime<Utc>> {
+    Ok(DateTime::parse_from_rfc3339(s)
+        .with_context(|| format!("{what} {s:?}"))?
+        .with_timezone(&Utc))
+}
+
+/// LATE_ENTRY: created_at at or after the sales cutoff on the draw date (D-030).
+pub fn is_late_entry(t: &TicketRow) -> Result<bool> {
+    Ok(parse_utc(&t.created_at, "created_at")? >= sales_cutoff(t.draw_date)?)
+}
+
+/// LATE_VOID: voided at or after the sales cutoff on the ticket's draw date. Stricter than
+/// "after the draw is archived": once sales close, a void could hide a result.
+pub fn is_late_void(t: &TicketRow, v: &VoidRow) -> Result<bool> {
+    Ok(parse_utc(&v.voided_at, "voided_at")? >= sales_cutoff(t.draw_date)?)
+}
+
+/// Chance baseline for average white matches per ticket: k*k/n (25/69 PB, 25/70 MM).
+pub fn chance_white_baseline(era: &Era) -> f64 {
+    crate::odds::Matrix::new(era.white_count, era.white_max, era.bonus_max).expected_white_matches()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -351,8 +413,12 @@ pub enum GradeStatus {
 pub struct Grade {
     pub ticket: TicketRow,
     pub status: GradeStatus,
-    /// created_at is at or after the official draw time (eras.toml draw_time_et).
-    pub entered_after_draw: bool,
+    /// LATE_ENTRY: created_at at/after the 22:00 ET sales cutoff (D-030). Not scorecard-eligible.
+    pub late_entry: bool,
+    /// Void record for this ticket, if any.
+    pub void: Option<VoidRow>,
+    /// LATE_VOID: voided at/after the sales cutoff. Such tickets stay graded and counted.
+    pub late_void: bool,
     pub drawn_whites: Option<[u32; 5]>,
     pub drawn_special: Option<u32>,
     /// Multiplier value from the archive row, if any.
@@ -451,25 +517,29 @@ pub fn lookup_prize(
 
 /// Grade one ticket against the archive (and optional cached payout rows for its draw).
 pub fn grade(
-    g: &GameDef,
     t: &TicketRow,
     draws: &[Draw],
     cache_rows: &[PayoutRow],
+    void: Option<&VoidRow>,
 ) -> Result<Grade> {
     let game = match t.game.as_str() {
         "powerball" => Game::Powerball,
         "megamillions" => Game::Megamillions,
         other => bail!("ticket {}: unknown game {other:?}", t.ticket_id),
     };
-    let created: DateTime<Utc> = DateTime::parse_from_rfc3339(&t.created_at)
-        .with_context(|| format!("ticket {} created_at", t.ticket_id))?
-        .with_timezone(&Utc);
-    let entered_after_draw = created >= draw_instant(g, t.draw_date)?;
+    let late_entry = is_late_entry(t).with_context(|| format!("ticket {}", t.ticket_id))?;
+    let late_void = match void {
+        Some(v) => is_late_void(t, v)?,
+        None => false,
+    };
+    let void = void.cloned();
     let Some(draw) = draws.iter().find(|d| d.draw_date == t.draw_date) else {
         return Ok(Grade {
             ticket: t.clone(),
             status: GradeStatus::Pending,
-            entered_after_draw,
+            late_entry,
+            void,
+            late_void,
             drawn_whites: None,
             drawn_special: None,
             drawn_multiplier: None,
@@ -504,7 +574,9 @@ pub fn grade(
     Ok(Grade {
         ticket: t.clone(),
         status: GradeStatus::Graded,
-        entered_after_draw,
+        late_entry,
+        void,
+        late_void,
         drawn_whites: Some(draw.whites()),
         drawn_special: Some(draw.bonus),
         drawn_multiplier: draw.multiplier,

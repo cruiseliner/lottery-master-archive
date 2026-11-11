@@ -43,6 +43,31 @@ pub struct Options {
     pub crosscheck: Option<usize>,
 }
 
+/// One human-readable result line: `{STATUS:4}  {game:12} {check:28} {detail}`.
+/// `.github/workflows/crosscheck.yml` matches these lines with `FAIL*crosscheck*` /
+/// `WARN*crosscheck*` / `FAIL*`; tests/check_format.rs pins the format.
+pub fn format_line(c: &CheckResult) -> String {
+    let s = match c.status {
+        Status::Pass => "PASS",
+        Status::Warn => "WARN",
+        Status::Fail => "FAIL",
+        Status::Skip => "SKIP",
+    };
+    format!("{s:4}  {:12} {:28} {}", c.game, c.check, c.detail)
+}
+
+/// Final summary line (`summary: P pass, W warn, F fail, S skip`).
+pub fn format_summary(res: &[CheckResult]) -> String {
+    let count = |st: Status| res.iter().filter(|c| c.status == st).count();
+    format!(
+        "summary: {} pass, {} warn, {} fail, {} skip",
+        count(Status::Pass),
+        count(Status::Warn),
+        count(Status::Fail),
+        count(Status::Skip)
+    )
+}
+
 fn r(game: &str, check: &str, status: Status, detail: impl Into<String>) -> CheckResult {
     CheckResult {
         game: game.into(),

@@ -65,7 +65,9 @@ Never committed (R6-04 CI guard refuses tracked `ledger/` and `tickets*.csv`). A
 Void records (PRIVATE: `ledger/tickets/tickets_voids.csv`, append-only, D-031):
 `ticket_id,voided_at,reason`. One row per voided ticket (`voided_at` UTC `Z`). Reading fails
 closed on a wrong header, an unknown `ticket_id`, or a ticket voided twice. Ticket rows are
-never changed; a corrected ticket is a new `tickets.csv` row.
+never changed; a corrected ticket is a new `tickets.csv` row. Flags are computed, not stored:
+`LATE_ENTRY` = `created_at` at/after 22:00 ET on `draw_date` (D-030); `LATE_VOID` = `voided_at`
+at/after that cutoff. Both files must end in a newline; a partial last line fails closed.
 
 ## ingest_log.csv (`data/ingest_log.csv`)
 

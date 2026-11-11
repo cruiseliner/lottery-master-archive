@@ -5,10 +5,31 @@ use lottotool::Game;
 use lottotool::data::{Draw, PayoutRow};
 use lottotool::eras::{ErasFile, GameDef};
 use lottotool::tickets::{
-    GradeStatus, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, VOIDS_HEADER, append, grade,
-    ledger_path, lookup_prize, read_ledger, read_voids, validate, void, voids_path,
+    GradeStatus, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, TicketRow, VOIDS_HEADER, VoidRow,
+    append as append_with, chance_white_baseline, grade as grade_with, is_late_void, ledger_path,
+    lookup_prize, read_ledger, read_voids, validate, void, voids_path,
 };
 use std::path::{Path, PathBuf};
+
+/// Append with an empty archive (no draw for the ticket date yet).
+fn append(
+    root: &Path,
+    g: &GameDef,
+    t: &NewTicket,
+    now: chrono::DateTime<Utc>,
+) -> anyhow::Result<TicketRow> {
+    append_with(root, g, t, &[], now)
+}
+
+/// Grade without a void record.
+fn grade(
+    _g: &GameDef,
+    t: &TicketRow,
+    draws: &[Draw],
+    cache: &[PayoutRow],
+) -> anyhow::Result<lottotool::tickets::Grade> {
+    grade_with(t, draws, cache, None)
+}
 
 fn d(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
@@ -275,7 +296,7 @@ fn pending_when_draw_not_ingested() {
     let gr = grade(&g, &t, &[other], &[]).unwrap();
     assert_eq!(gr.status, GradeStatus::Pending);
     assert!(gr.tier.is_none() && !gr.prize_tier && gr.prize_usd.is_none());
-    assert!(!gr.entered_after_draw);
+    assert!(!gr.late_entry);
 }
 
 #[test]
@@ -360,15 +381,101 @@ fn ambiguous_cache_amount_is_lookup_needed() {
 }
 
 #[test]
-fn entered_after_draw_is_flagged() {
+fn late_entry_is_flagged_after_2200_et_cutoff() {
     let g = game("powerball");
     let root = tmp_root("late");
-    // 2030-01-03 04:00Z = 2030-01-02 23:00 EST, after the 22:59 ET draw.
-    let late = Utc.with_ymd_and_hms(2030, 1, 3, 4, 0, 0).unwrap();
-    let t = append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), late).unwrap();
-    let gr = grade(&g, &t, &[], &[]).unwrap();
-    assert!(gr.entered_after_draw);
+    // 2030-01-03 03:00Z = 2030-01-02 22:00 EST: exactly the D-030 cutoff -> LATE_ENTRY.
+    let at_cutoff = Utc.with_ymd_and_hms(2030, 1, 3, 3, 0, 0).unwrap();
+    let t = append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), at_cutoff).unwrap();
+    assert!(grade(&g, &t, &[], &[]).unwrap().late_entry);
+    // One second earlier is on time.
+    let on_time = Utc.with_ymd_and_hms(2030, 1, 3, 2, 59, 59).unwrap();
+    let t2 = append(&root, &g, &pb(&[1, 2, 3, 4, 6], 6, false), on_time).unwrap();
+    assert!(!grade(&g, &t2, &[], &[]).unwrap().late_entry);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn back_dated_ticket_for_archived_draw_is_refused() {
+    let g = game("powerball");
+    let root = tmp_root("backdate");
+    let draw = fake_draw(PB_DAY, "pb-2015", [10, 20, 30, 40, 50], 26, Some(2));
+    let e = append_with(
+        &root,
+        &g,
+        &pb(&[10, 20, 30, 40, 50], 26, false),
+        &[draw],
+        before_draw(),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("already in the archive"), "{e}");
+    assert!(!ledger_path(&root).exists(), "nothing written");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn partial_last_line_refuses_append_for_tickets_and_voids() {
+    let g = game("powerball");
+    let root = tmp_root("partial");
+    append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    // Simulate a crash mid-write: valid prefix plus a partial row with no trailing newline.
+    let mut bytes = std::fs::read(ledger_path(&root)).unwrap();
+    bytes.extend_from_slice(b"T0002,2030-01-02T15:00:00Z,powerball,2030-01-02,pb-2015,1,2");
+    std::fs::write(ledger_path(&root), &bytes).unwrap();
+    let e = append(&root, &g, &pb(&[1, 2, 3, 4, 7], 6, false), before_draw()).unwrap_err();
+    assert!(format!("{e:#}").contains("newline"), "{e:#}");
+    assert_eq!(
+        std::fs::read(ledger_path(&root)).unwrap(),
+        bytes,
+        "tickets file untouched"
+    );
+
+    let root2 = tmp_root("partial-void");
+    append(&root2, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    append(&root2, &g, &pb(&[1, 2, 3, 4, 6], 6, false), before_draw()).unwrap();
+    let partial = format!("{VOIDS_HEADER}\nT0001,2030-01-02T15:00:00Z,typo");
+    std::fs::write(voids_path(&root2), &partial).unwrap();
+    let e = void(&root2, "T0002", "typo", before_draw()).unwrap_err();
+    assert!(format!("{e:#}").contains("newline"), "{e:#}");
+    assert_eq!(
+        std::fs::read_to_string(voids_path(&root2)).unwrap(),
+        partial
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&root2);
+}
+
+#[test]
+fn late_void_is_flagged_and_still_graded() {
+    let g = game("powerball");
+    let root = tmp_root("latevoid");
+    let t = append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    // Voided the morning after the draw (allowed, but LATE_VOID).
+    let after = Utc.with_ymd_and_hms(2030, 1, 3, 14, 0, 0).unwrap();
+    let v = void(&root, "T0001", "changed my mind", after).unwrap();
+    assert!(is_late_void(&t, &v).unwrap());
+    let draw = fake_draw(PB_DAY, "pb-2015", [10, 20, 30, 40, 50], 26, Some(2));
+    let gr = grade_with(&t, &[draw], &[], Some(&v)).unwrap();
+    assert!(gr.late_void);
+    assert_eq!(gr.status, GradeStatus::Graded);
+    assert_eq!(gr.void.as_ref(), Some(&v));
+    // An on-time void (before the cutoff) is not late.
+    let early = VoidRow {
+        voided_at: "2030-01-02T16:00:00Z".into(),
+        ..v
+    };
+    assert!(!is_late_void(&t, &early).unwrap());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn chance_baselines_are_k_squared_over_n() {
+    let pb = game("powerball");
+    let mm = game("megamillions");
+    let b = chance_white_baseline(pb.current_era());
+    assert!((b - 25.0 / 69.0).abs() < 1e-12 && format!("{b:.3}") == "0.362");
+    let b = chance_white_baseline(mm.current_era());
+    assert!((b - 25.0 / 70.0).abs() < 1e-12 && format!("{b:.3}") == "0.357");
 }
 
 // ------------------------------------------------------------------ voids

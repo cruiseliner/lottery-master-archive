@@ -9,7 +9,8 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - `eras.toml`: optional `power_play_price_usd` (pb-2015 = 1); `pb` / `mm` CLI aliases.
 - tests/tickets.rs (fake data, temp dirs). OI-33 lists deferred items.
 - `lottotool ticket void <id> --reason`: append-only void records (`ledger/tickets/tickets_voids.csv`); `list` marks VOID, `grade` excludes. `--cost` strict by decision.
-- `.github/workflows/crosscheck.yml`: weekly read-only official-source crosscheck (`--crosscheck 8`), mismatch fails the run (D-025; closes OI-20).
+- `.github/workflows/crosscheck.yml`: weekly read-only official-source crosscheck (`--crosscheck 8`), mismatch fails the run (D-025; OI-20 open until first green dispatch on main).
+- Claude t47u follow-ups: zero successful comparisons = FAIL; untracked-aware tree check; output in `$RUNNER_TEMP`; `tests/check_format.rs` pins the parsed line format. `ticket add` refuses archived draws; `LATE_ENTRY` / `LATE_VOID` flags; partial-last-line guard on both ledger files; `grade` white-match average vs chance baseline; synthetic README examples.
 
 ### Changed (2026-10-24 morning — t235u schedule facts + t236u coverage audit)
 - COLLAB: t236u brief pasted verbatim into FROM CLAUDE; t235u body missing from handoff (noted, not invented). FOR CLAUDE: 655e6cc push proxy time, Phase 1 single-cron schedule form, event=schedule=0; coverage audit summary + file links.

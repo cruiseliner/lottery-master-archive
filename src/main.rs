@@ -391,21 +391,9 @@ fn run(cli: &Cli) -> Result<ExitCode> {
                 );
             } else {
                 for c in &res {
-                    let s = match c.status {
-                        Status::Pass => "PASS",
-                        Status::Warn => "WARN",
-                        Status::Fail => "FAIL",
-                        Status::Skip => "SKIP",
-                    };
-                    println!("{s:4}  {:12} {:28} {}", c.game, c.check, c.detail);
+                    println!("{}", check::format_line(c));
                 }
-                println!(
-                    "summary: {} pass, {} warn, {} fail, {} skip",
-                    count(Status::Pass),
-                    count(Status::Warn),
-                    count(Status::Fail),
-                    count(Status::Skip)
-                );
+                println!("{}", check::format_summary(&res));
             }
             Ok(if fail && *fail_on_error {
                 ExitCode::from(1)
@@ -640,7 +628,8 @@ fn run_ticket(cli: &Cli, eras: &ErasFile, cmd: &TicketCmd) -> Result<ExitCode> {
                 cost_usd: *cost,
                 note: note.clone(),
             };
-            let row = tickets::append(&cli.root, g, &t, Utc::now())?;
+            let draws = load_draws(cli, *game)?;
+            let row = tickets::append(&cli.root, g, &t, &draws, Utc::now())?;
             if cli.json {
                 println!(
                     "{}",
@@ -701,9 +690,22 @@ fn run_ticket(cli: &Cli, eras: &ErasFile, cmd: &TicketCmd) -> Result<ExitCode> {
                 println!("{}", json!({"ok": true, "tickets": out}));
             } else {
                 for r in &rows {
-                    let void_tag = void_of(&r.ticket_id)
-                        .map(|v| format!("  [VOID {}: {}]", v.voided_at, v.reason))
-                        .unwrap_or_default();
+                    let mut void_tag = match void_of(&r.ticket_id) {
+                        Some(v) => format!(
+                            "  [{} {}: {}]",
+                            if tickets::is_late_void(r, v)? {
+                                "LATE_VOID"
+                            } else {
+                                "VOID"
+                            },
+                            v.voided_at,
+                            v.reason
+                        ),
+                        None => String::new(),
+                    };
+                    if tickets::is_late_entry(r)? {
+                        void_tag.push_str("  [LATE_ENTRY]");
+                    }
                     println!(
                         "{} {:12} {} whites {} {} {}{} ${}{}{}",
                         r.ticket_id,
@@ -741,21 +743,11 @@ fn run_grade(
     all: bool,
 ) -> Result<ExitCode> {
     let voids = tickets::read_voids(&cli.root)?;
-    let all_rows = tickets::read_ledger(&cli.root)?;
+    let ledger = tickets::read_ledger(&cli.root)?;
     let mut voided_excluded = 0usize;
-    let ledger: Vec<_> = all_rows
-        .into_iter()
-        .filter(|t| {
-            let v = voids.iter().any(|v| v.ticket_id == t.ticket_id);
-            let in_scope =
-                game.is_none_or(|g| t.game == g.id()) && draw_date.is_none_or(|d| t.draw_date == d);
-            if v && in_scope {
-                voided_excluded += 1;
-            }
-            !v
-        })
-        .collect();
     let mut grades = Vec::new();
+    // (game id, era baseline, baseline label) for the measurement line.
+    let mut baselines: Vec<(String, f64, String)> = Vec::new();
     for gm in Game::all() {
         if game.is_some_and(|g| g != gm) {
             continue;
@@ -769,11 +761,25 @@ fn run_grade(
             continue;
         }
         let g = eras.game(gm.id())?;
+        let era = g.current_era();
+        baselines.push((
+            gm.id().to_string(),
+            tickets::chance_white_baseline(era),
+            format!("{}/{}", era.white_count * era.white_count, era.white_max),
+        ));
         let draws = load_draws(cli, gm)?;
         let latest = draws.last().map(|d| d.draw_date);
         for t in mine {
+            let v = voids.iter().find(|v| v.ticket_id == t.ticket_id);
+            // On-time voids are excluded; LATE_VOIDs stay graded and counted (D-031).
+            if let Some(v) = v
+                && !tickets::is_late_void(t, v)?
+            {
+                voided_excluded += 1;
+                continue;
+            }
             let cache = tickets::read_cache(&cli.root, gm, t.draw_date)?;
-            let gr = tickets::grade(g, t, &draws, &cache)?;
+            let gr = tickets::grade(t, &draws, &cache, v)?;
             let default_pick = gr.status == GradeStatus::Pending || Some(t.draw_date) == latest;
             if all || draw_date.is_some() || default_pick {
                 grades.push(gr);
@@ -785,11 +791,34 @@ fn run_grade(
         .filter(|g| g.status == GradeStatus::Pending)
         .count();
     let prize_hits = grades.iter().filter(|g| g.prize_tier).count();
+    let late_voids = grades.iter().filter(|g| g.late_void).count();
+    let late_entries = grades.iter().filter(|g| g.late_entry).count();
+    // Measurement of past tickets vs the chance baseline k*k/n. History, not prediction.
+    let measurement: Vec<_> = baselines
+        .iter()
+        .filter_map(|(gid, base, label)| {
+            let graded: Vec<_> = grades
+                .iter()
+                .filter(|g| g.ticket.game == *gid && g.status == GradeStatus::Graded)
+                .collect();
+            if graded.is_empty() {
+                return None;
+            }
+            let avg = graded.iter().map(|g| g.white_matches.len()).sum::<usize>() as f64
+                / graded.len() as f64;
+            Some(json!({"game": gid, "graded_tickets": graded.len(),
+                "avg_white_matches": avg, "chance_baseline": base, "baseline_formula": label}))
+        })
+        .collect();
     if cli.json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({"ok": true, "grades": grades,
-                "graded": grades.len() - pending, "pending": pending, "prize_tier_hits": prize_hits, "voided_excluded": voided_excluded,
+                "graded": grades.len() - pending, "pending": pending, "prize_tier_hits": prize_hits,
+                "voided_excluded": voided_excluded, "late_voids": late_voids,
+                "late_entries": late_entries,
+                "white_match_measurement": measurement,
+                "measurement_note": "history of these tickets vs chance; not a prediction",
                 "note": "computed on demand; nothing written to the ledger"}))?
         );
         return Ok(ExitCode::SUCCESS);
@@ -797,15 +826,27 @@ fn run_grade(
     for gr in &grades {
         let t = &gr.ticket;
         let sp = special_label(&t.game);
+        let mut flags = Vec::new();
+        if gr.late_entry {
+            flags.push("LATE_ENTRY".to_string());
+        }
+        if let Some(v) = &gr.void {
+            flags.push(format!("LATE_VOID {} ({})", v.voided_at, v.reason));
+        }
         println!(
-            "{} {} {} ticket {} {} {}{}",
+            "{} {} {} ticket {} {} {}{}{}",
             t.ticket_id,
             t.game,
             t.draw_date,
             fmt_balls(&t.whites()),
             sp,
             t.special,
-            if t.power_play { " +PP" } else { "" }
+            if t.power_play { " +PP" } else { "" },
+            if flags.is_empty() {
+                String::new()
+            } else {
+                format!("  [{}]", flags.join("; "))
+            }
         );
         match gr.status {
             GradeStatus::Pending => println!("  PENDING: draw not in archive yet"),
@@ -835,17 +876,29 @@ fn run_grade(
                 );
             }
         }
-        if gr.entered_after_draw {
-            println!("  note: ticket entered at/after the official draw time");
-        }
     }
     println!(
-        "{} graded, {} pending, {} in a prize tier, {} voided excluded",
+        "{} graded, {} pending, {} in a prize tier, {} voided excluded, {} LATE_VOID (kept), {} LATE_ENTRY",
         grades.len() - pending,
         pending,
         prize_hits,
-        voided_excluded
+        voided_excluded,
+        late_voids,
+        late_entries
     );
+    for m in &measurement {
+        println!(
+            "  {}: avg white matches {:.3} over {} graded ticket(s); chance baseline {} = {:.3}",
+            m["game"].as_str().unwrap_or(""),
+            m["avg_white_matches"].as_f64().unwrap_or(0.0),
+            m["graded_tickets"],
+            m["baseline_formula"].as_str().unwrap_or(""),
+            m["chance_baseline"].as_f64().unwrap_or(0.0)
+        );
+    }
+    if !measurement.is_empty() {
+        println!("  (history of these tickets measured against chance; not a prediction)");
+    }
     Ok(ExitCode::SUCCESS)
 }
 

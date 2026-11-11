@@ -45,9 +45,14 @@ cargo build --release
 
 A private, append-only ledger for tickets you actually bought, checked against the archive.
 
+> **Not for real tickets yet.** Do not use `grade` on real tickets until the weekly
+> crosscheck (D-025) has been dispatched once on `main` and come back green (OI-20).
+
+Example numbers below are synthetic.
+
 ```
-lottotool ticket add --game pb --draw-date 2026-11-11 --whites 3,14,22,41,60 --special 9 --power-play [--cost 3] [--note "..."]
-lottotool ticket add --game mm --draw-date 2026-11-13 --whites 7,8,9,10,11 --special 12
+lottotool ticket add --game pb --draw-date 2026-11-11 --whites 1,2,3,4,5 --special 6 --power-play [--cost 3] [--note "..."]
+lottotool ticket add --game mm --draw-date 2026-11-13 --whites 1,2,3,4,5 --special 6
 lottotool ticket void T0001 --reason "typo in white ball"
 lottotool ticket list [--game pb] [--draw-date YYYY-MM-DD]
 lottotool grade                     # pending tickets + tickets for each game's latest archived draw
@@ -58,14 +63,22 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
 * The ledger is `ledger/tickets/tickets.csv` under the **gitignored `ledger/`**. Rows are only
   appended (never rewritten); `created_at` is UTC. `ticket add` refuses to write if the ledger
   path is not gitignored, and fails closed on an unexpected header.
+* Each append is one `write_all` of the whole row followed by an fsync. Before any read or
+  append, the tool checks the file ends in a newline; a partial last line (e.g. after a crash)
+  is refused, never glued onto. This applies to both ledger files.
 * `ticket add` validates against `eras.toml` for the draw date: scheduled draw weekday, ball
   ranges, five distinct whites, Power Play only for Powerball, and the price (`price_usd`, plus
-  `power_play_price_usd`). `--cost`, if given, must equal that price (strict by decision, D-031). Only eras whose prize
-  chart is encoded (`pb-2015`, `mm-2025`) are accepted.
+  `power_play_price_usd`). `--cost`, if given, must equal that price (strict by decision,
+  D-031). Only eras whose prize chart is encoded (`pb-2015`, `mm-2025`) are accepted.
+* **No back-dating:** `ticket add` refuses a draw that is already in `data/`. A ticket added at
+  or after the 22:00 ET sales cutoff on its draw date (D-030), but before the draw is archived,
+  is accepted and shown as **`LATE_ENTRY`** (not eligible for any scorecard).
 * `ticket void <id> --reason ...` appends a record to `ledger/tickets/tickets_voids.csv`; the
-  ticket row is never changed. Unknown ids and second voids are refused. `ticket list` marks
-  voided tickets `VOID`; `grade` leaves them out. Re-enter a corrected ticket with `ticket add`
-  (it gets a new id).
+  ticket row is never changed. Unknown ids and second voids are refused. Re-enter a corrected
+  ticket with `ticket add` (it gets a new id). A void before the sales cutoff removes the ticket
+  from `grade` (counted as "voided excluded"). A void at or after the cutoff is allowed but is
+  **`LATE_VOID`**: the ticket stays graded and counted, so losing tickets can't be erased.
+  `ticket list` marks `VOID` / `LATE_VOID` / `LATE_ENTRY`.
 * `grade` reports white matches, special-ball match, the tier (e.g. `3+1`), whether it is a
   prize tier on the current chart, and the archive multiplier (Powerball Power Play) when the
   ticket has it and the archive row has a value. A special ball only matches the drawn special
@@ -74,6 +87,9 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
   the cache has no single unambiguous amount for the tier (no cache, jackpot / pari-mutuel
   text, several amounts), `grade` prints `TIER_LOOKUP_NEEDED`; it never computes or invents an
   amount. Grades are computed on demand and never written back into the ledger.
+* `grade` also prints each game's average white matches over the graded tickets shown, next to
+  the chance baseline k²/n (25/69 ≈ 0.362 Powerball, 25/70 ≈ 0.357 Mega Millions). This is a
+  measurement of past tickets, labeled as history, not a prediction.
 * Nothing here predicts numbers. A grade is a record of what happened, not a strategy.
 
 ## Automation
@@ -84,7 +100,7 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
   public repos after 60 days without activity. It can also be run by hand (`workflow_dispatch`).
 * `.github/workflows/crosscheck.yml` runs weekly (Sundays 16:43 America/New_York) and compares
   the latest 8 archived draws per game with the official winning-number pages. It is read-only;
-  a mismatch fails the run (D-025).
+  a mismatch, or zero successful comparisons for a game, fails the run (D-025).
 * `.github/workflows/ci.yml` runs fmt, clippy `-D warnings`, the tests, and the data integrity check.
 * `.github/workflows/release.yml`: on a `v*` tag, it builds a Linux binary and publishes it with `SHA256SUMS`.
 

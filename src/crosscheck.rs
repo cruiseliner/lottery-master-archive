@@ -140,16 +140,28 @@ pub fn run(game: Game, draws: &[Draw], n: usize) -> Vec<CheckResult> {
             Err(e) => errors.push(format!("{}: {e:#}", d.draw_date)),
         }
     }
-    let mut out = Vec::new();
+    vec![summarize(gid, take, ok, &mismatches, &errors)]
+}
+
+/// Turn one game's comparison counts into a single `crosscheck` result (D-025):
+/// all matched = PASS; any mismatch = FAIL; zero successful comparisons (every fetch failed)
+/// = FAIL, so a broken scraper can't stay green; some source errors but >= 1 match = WARN.
+pub fn summarize(
+    gid: &str,
+    take: usize,
+    ok: usize,
+    mismatches: &[String],
+    errors: &[String],
+) -> CheckResult {
     if mismatches.is_empty() && errors.is_empty() {
-        out.push(r(
+        r(
             gid,
             "crosscheck",
             Status::Pass,
             format!("{ok}/{take} latest draws match official winning numbers"),
-        ));
+        )
     } else if !mismatches.is_empty() {
-        out.push(r(
+        r(
             gid,
             "crosscheck",
             Status::Fail,
@@ -164,9 +176,25 @@ pub fn run(game: Game, draws: &[Draw], n: usize) -> Vec<CheckResult> {
                     .collect::<Vec<_>>()
                     .join("; ")
             ),
-        ));
+        )
+    } else if ok == 0 {
+        r(
+            gid,
+            "crosscheck",
+            Status::Fail,
+            format!(
+                "0/{take} compared: no successful official-source comparison ({} source errors): {}",
+                errors.len(),
+                errors
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ),
+        )
     } else {
-        out.push(r(
+        r(
             gid,
             "crosscheck",
             Status::Warn,
@@ -180,9 +208,8 @@ pub fn run(game: Game, draws: &[Draw], n: usize) -> Vec<CheckResult> {
                     .collect::<Vec<_>>()
                     .join("; ")
             ),
-        ));
+        )
     }
-    out
 }
 
 #[cfg(test)]

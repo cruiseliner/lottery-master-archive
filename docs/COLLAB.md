@@ -1282,3 +1282,52 @@ Adam approved a five-part v0.2 plan and asked for review after each step. This i
 - **Voids:** `ticket void <id> --reason` appends to `ledger/tickets/tickets_voids.csv` (`ticket_id,voided_at,reason`; name matches the R6-04 `tickets*.csv` guard). Unknown id and double void refused; reads fail closed on unknown/duplicate void rows; ticket rows never rewritten. `list` marks VOID; `grade` excludes and counts them. A corrected ticket is a new row.
 - **Tests:** 4 more in `tests/tickets.rs` (14 total), fake data in temp dirs.
 - No real tickets, picks or payout tables in this change.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 provisional review (relayed verbatim by Adam, t47u)
+
+Provisional: I can’t sign off yet, and I’d hold the merge. Parts of the PR didn’t load for me.
+
+What I could and couldn’t read
+
+- Read: the PR description, crosscheck.yml in full, and the README, CHANGELOG, COLLAB, DECISIONS and CROSSCHECK_LOG changes.
+- Not read: the Rust, meaning src/tickets.rs, main.rs, eras.rs, check.rs, lib.rs, tests/tickets.rs and eras.toml. The diff page cut off before them, and GitHub blocked or rate-limited my other fetches.
+- Not checked: the two runs you linked, CI 43063414987 and crosscheck 43063433083, so I’m not confirming “8 of 8” or “CI green” myself.
+
+Please paste or link (as blob/3cf3afe… URLs) src/tickets.rs, tests/tickets.rs, and the main.rs and eras.toml hunks. I’ll review the code properly then.
+
+crosscheck.yml
+
+The structure is sound:
+
+- Read-only permissions, persist-credentials: false, and the same pinned SHAs and rustc 1.99.1 as the other workflows.
+- --no-stale, so lateness can’t fail the run.
+- Sunday 16:43 ET in the timezone: form we settled on.
+- Both a mismatch and a changed working tree fail the run.
+- The update.yml schedule is untouched.
+
+Changes I’d make:
+
+- Silent degradation. A source error is only a WARN and the job stays green, so a permanently broken scraper would show green forever. Fail the run if a game has zero successful comparisons. Optionally, alert after a second consecutive all-WARN week.
+- Tree check. git diff --quiet ignores untracked files, so a stray new file wouldn’t trip it. Use git status --porcelain --untracked-files=all, and write check.txt to $RUNNER_TEMP, or exclude it.
+- Output parsing. The case patterns (FAIL*crosscheck*) depend on the exact check output format. Add a test that pins that format, so a wording change can’t silently downgrade a failure to nothing.
+
+Process and design
+
+- Merge gate (D-025 / OI-20). Scheduled workflows only run from the default branch, so the first real scheduled run is after the merge. Keep OI-20 open until you’ve dispatched crosscheck once on main and it’s green. Don’t use grade for real tickets before then.
+- Back-dated tickets. The README says ticket add validates weekday, ranges, distinctness and price, but not whether the draw has already happened. D-030 says picks are entered before the sales cutoff. Please confirm that add refuses a draw already in data/, and either refuses or flags LATE_ENTRY after the cutoff. Otherwise the ledger can’t back any future scorecard.
+- Late voids. A void after the draw is archived lets losing tickets be erased from the record. Allow it only with the void recorded and shown in grade’s totals, and flag it LATE_VOID. You already count voids, so this is a small step.
+- Append robustness. For OpenOptions::append, please confirm that:
+  - each row goes out in one write_all;
+  - there’s an fsync afterwards;
+  - add checks the file ends in a newline first, so a crash can’t glue the next row onto a partial one.
+- README examples. Make the example numbers obviously synthetic (1,2,3,4,5). One example looks like a real pick, and this repo is public.
+- Free tickets. Strict --cost can’t represent a won free ticket. If that matters, note it under OI-33.
+- Optional. Have grade print each game’s average white matches next to the chance baseline: 25/69 ≈ 0.362 for Powerball and 25/70 ≈ 0.357 for Mega Millions. It keeps “at least two” honest as a measurement and costs nothing.
+
+Cross-checks
+
+- --game pb --draw-date 2026-11-11 is a Wednesday and mm 2026-11-13 is a Friday, so the README examples match the schedules.
+- --cost 3 for Powerball with Power Play ($2 + $1) is consistent with power_play_price_usd.
+- The ticket grading rule is right: a ticket’s special ball never matches a drawn white.
+
+Paste the code files and I’ll finish the review. After that, step 2 can start once you’ve confirmed the merge.

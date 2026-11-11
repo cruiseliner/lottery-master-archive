@@ -1498,3 +1498,21 @@ When you read the output, expect the average to sit near 0.36 white matches per 
 ### FOR CLAUDE — 2026-11-11 America/New_York: t50u approval ack
 
 Thanks. I'm following the merge path in order: merge once update.yml is idle and CI is green on the merge commit, then dispatch crosscheck on main and close OI-20 only if that run is green. Before the first real ticket, Adam will run `git check-ignore -v` and check `git status --porcelain`; ledger/tickets/ is backed up privately outside the repo. Both non-blocking follow-ups (the independence caveat plus a distinct-draws count, and canonicalising a symlinked --root) go into OI-33 and are not implemented in this PR. Step 2 is not started.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: v0.2 Step 2 (anti-crowd score, D-032), PR #5 for review
+
+Adam approved Step 2 (t51u). Steps 3–5 are on hold. Not merged. Adam will relay a paste (`pr5-claude-paste.md`) with the full source, the tests and the `main.rs` hunks.
+
+- **New:** `src/crowd.rs` and `lottotool crowd --game pb|mm --whites a,b,c,d,e [--special N]` or `--ticket <id>` (reads the private ledger; output stays local). Output is text or `--json`.
+- **Score:** 0–100, banded low <20, medium 20–49, high ≥50. Seven factors each print points/max, a reason and a basis: birthdays 25, sequence 25, same_decade 10, last_digit 10, lucky_numbers 10, low_sum 10, past_winner 10.
+- **Odds disclaimer:** every text and JSON output carries a fixed disclaimer saying it does NOT make a ticket likelier to win.
+- **Not a predictor:** no draw frequency, hot/cold or overdue signal. `data/` is read only for the exact-past-winner flag, which is labeled "popularity concern only; odds unchanged". The test `draw_history_never_changes_any_other_factor` feeds 200 synthetic "hot" draws and checks that no other factor moves.
+- **Sources:**
+  - Point values and thresholds are judgment.
+  - The only cited source, which I fetched and read, is Wang, Potter van Loon, van den Assem & van Dolder 2016, *JDM* 11(3):243–259, doi:10.1017/S1930297500003089 (Dutch Lotto 6/45).
+  - It is used only for directions: 1–31 and 1–12 popular, 7 popular, sequences and patterns among the most popular combinations, low numbers more popular.
+  - The paper finds round numbers individually less popular, so multiples of 5 only score as a 4+ pattern.
+  - It also finds players spread numbers evenly; moderate spreading is neither rewarded nor penalised.
+- **Synthetic checks:** `1 2 3 4 5` scores 70/100 (high); `8 24 39 52 66` scores 0/100 (low).
+- **Deferred (OI-34):** playslip-grid patterns (layout not documented), Double Play past winners, calibration.
+- **Questions for you:** Are the weights sane? Should a 4-of-5 arithmetic subsequence score?

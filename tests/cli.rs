@@ -292,3 +292,113 @@ fn outside_a_git_work_tree_ticket_add_warns_and_proceeds() {
     assert!(root.join("ledger/tickets/tickets.csv").exists());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn crowd_prints_breakdown_and_disclaimer_in_text_and_json() {
+    let root = temp_copy("crowd", false);
+    let o = run(
+        &root,
+        &[
+            "crowd",
+            "--game",
+            "pb",
+            "--whites",
+            "1,2,3,4,5",
+            "--special",
+            "6",
+        ],
+    );
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    assert!(
+        out.starts_with("crowd score 70/100 (HIGH) for powerball whites 1 2 3 4 5 PB 6"),
+        "{out}"
+    );
+    for id in [
+        "birthdays",
+        "sequence",
+        "same_decade",
+        "last_digit",
+        "lucky_numbers",
+        "low_sum",
+        "past_winner",
+    ] {
+        assert!(out.contains(id), "{id}: {out}");
+    }
+    assert!(
+        out.contains("does NOT make a ticket likelier to win"),
+        "{out}"
+    );
+
+    let o = run(
+        &root,
+        &[
+            "--json",
+            "crowd",
+            "--game",
+            "mm",
+            "--whites",
+            "9,26,38,55,67",
+        ],
+    );
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    let v: serde_json::Value = serde_json::from_str(out.trim()).unwrap();
+    assert_eq!(v["crowd"]["score"], 0);
+    assert_eq!(v["crowd"]["band"], "low");
+    assert_eq!(v["weights"], "judgment");
+    assert!(
+        v["crowd"]["disclaimer"]
+            .as_str()
+            .unwrap()
+            .contains("exactly the same odds")
+    );
+    assert_eq!(v["crowd"]["factors"].as_array().unwrap().len(), 7);
+
+    // Invalid input fails without output on stdout.
+    let o = run(&root, &["crowd", "--game", "pb", "--whites", "1,2,3,4,70"]);
+    assert!(!o.status.success());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn crowd_scores_a_ledger_ticket_by_id() {
+    let root = temp_repo("crowd-ticket");
+    let o = run(
+        &root,
+        &[
+            "ticket",
+            "add",
+            "--game",
+            "mm",
+            "--draw-date",
+            "2030-01-04",
+            "--whites",
+            "10,20,30,40,50",
+            "--special",
+            "7",
+        ],
+    );
+    assert!(o.status.success(), "{:?}", text(&o));
+    let o = run(&root, &["crowd", "--ticket", "T0001"]);
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    assert!(
+        out.contains("for megamillions whites 10 20 30 40 50 MB 7 (era mm-2025)"),
+        "{out}"
+    );
+    assert!(
+        out.contains("does NOT make a ticket likelier to win"),
+        "{out}"
+    );
+    let o = run(&root, &["crowd", "--ticket", "T0099"]);
+    assert!(!o.status.success());
+    assert!(text(&o).1.contains("T0099 not in the ledger"));
+    // --ticket conflicts with --whites.
+    let o = run(
+        &root,
+        &["crowd", "--ticket", "T0001", "--whites", "1,2,3,4,5"],
+    );
+    assert!(!o.status.success());
+    let _ = std::fs::remove_dir_all(&root);
+}

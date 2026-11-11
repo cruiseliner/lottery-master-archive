@@ -99,6 +99,38 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
   and counted. This is a measurement of past tickets, labeled as history, not a prediction.
 * Nothing here predicts numbers. A grade is a record of what happened, not a strategy.
 
+### Anti-crowd score (v0.2 Step 2, D-032)
+
+> **This does NOT make a ticket likelier to win.** Every combination has exactly the same odds.
+> The score only aims to lower the chance of **splitting a jackpot** with other players if a
+> combination wins. Weights are judgment, not measured player data.
+
+```sh
+lottotool crowd --game pb --whites 1,2,3,4,5 --special 6     # synthetic example
+lottotool --json crowd --game mm --whites 9,26,38,55,67      # synthetic example
+lottotool crowd --ticket T0001                               # a ticket from your private ledger
+```
+
+Output is a 0–100 score (low < 20, medium 20–49, high ≥ 50) with one line per factor:
+
+| Factor | Max | Rule | Basis |
+|--------|-----|------|-------|
+| `birthdays` | 25 | whites ≤ 31: 3 → 5, 4 → 12, 5 → 20; +5 if all ≤ 12 | Wang et al. 2016 (direction) |
+| `sequence` | 25 | all five equally spaced → 25; else 4 consecutive → 18, 3 → 8 | Wang et al. 2016 (direction) |
+| `same_decade` | 10 | all five in one decade (1–9, 10–19, …) | judgment |
+| `last_digit` | 10 | 5 share a last digit → 10, 4 → 5 | judgment |
+| `lucky_numbers` | 10 | 3 per 7 or 11 (whites or special), max 6; +4 if ≥ 4 whites are multiples of 5 | Wang et al. 2016 (7); judgment (11, multiples of 5) |
+| `low_sum` | 10 | white sum < 50 % of the uniform mean k(n+1)/2 → 10, < 70 % → 5 | Wang et al. 2016 (low numbers); judgment (thresholds) |
+| `past_winner` | 10 | the same five whites were drawn before (any era in `data/`) | judgment; popularity only, odds unchanged |
+
+Synthetic examples: `1 2 3 4 5` scores 70/100 (high); `8 24 39 52 66` scores 0/100 (low).
+The point values are judgment. "Basis" only says which *direction* comes from published
+research (Wang, Potter van Loon, van den Assem & van Dolder, "Number preferences in lotteries",
+*Judgment and Decision Making* 11(3), 2016, Dutch Lotto 6/45 and a casino game, not US games).
+No draw frequency, hot/cold, overdue or other prediction signal is used; the archive is read
+only for the exact-past-winner check. Playslip-grid patterns are not scored (layout not
+documented here; OI-34).
+
 ## Automation
 
 * `.github/workflows/update.yml` runs daily at 06:17 America/New_York (after every draw night):
@@ -143,7 +175,8 @@ discrepancy. See `data/SOURCES.md`.
 
 * **v0.1 (this release):** archive, eras, missing-data registry, check, summary, export,
   exact odds, seeded simulation, scheduled updates.
-* **v0.2 (not started):** to be scoped in the Phase 2 review (`docs/HANDOFF_PHASE2.md`).
+* **v0.2 (in progress):** Step 1 ticket ledger + grade (D-031, merged); Step 2 anti-crowd score
+  (D-032, in review); Steps 3–5 on hold. Originally to be scoped in the Phase 2 review (`docs/HANDOFF_PHASE2.md`).
   Candidates: sourced pre-2015/pre-2010 era data, payout publication if permission is granted,
   a private local ticket checker (personal ledger kept out of the repo), and expected-value and
   tax views.

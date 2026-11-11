@@ -120,6 +120,26 @@ enum Cmd {
         #[arg(long)]
         all: bool,
     },
+    /// Anti-crowd heuristic: how popular a combination is likely to be with other players
+    /// (D-032). Does NOT change the odds of winning; only aims to avoid shared jackpots.
+    Crowd {
+        #[arg(long, required_unless_present = "ticket", conflicts_with = "ticket")]
+        game: Option<Game>,
+        /// Five white balls, comma-separated (synthetic example: 1,2,3,4,5).
+        #[arg(
+            long,
+            value_delimiter = ',',
+            required_unless_present = "ticket",
+            conflicts_with = "ticket"
+        )]
+        whites: Vec<u32>,
+        /// Powerball / Mega Ball (optional; only the 7/11 check uses it).
+        #[arg(long, conflicts_with = "ticket")]
+        special: Option<u32>,
+        /// Score a ticket from the private ledger by id (e.g. T0001); output stays local.
+        #[arg(long)]
+        ticket: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -187,6 +207,12 @@ fn run(cli: &Cli) -> Result<ExitCode> {
     let eras = ErasFile::load(&cli.root.join("eras.toml"))?;
     match &cli.cmd {
         Cmd::Ticket { cmd } => run_ticket(cli, &eras, cmd),
+        Cmd::Crowd {
+            game,
+            whites,
+            special,
+            ticket,
+        } => run_crowd(cli, &eras, *game, whites, *special, ticket.as_deref()),
         Cmd::Grade {
             game,
             draw_date,
@@ -605,6 +631,85 @@ fn fmt_balls(w: &[u32]) -> String {
 
 fn special_label(game: &str) -> &'static str {
     if game == "powerball" { "PB" } else { "MB" }
+}
+
+fn run_crowd(
+    cli: &Cli,
+    eras: &ErasFile,
+    game: Option<Game>,
+    whites: &[u32],
+    special: Option<u32>,
+    ticket: Option<&str>,
+) -> Result<ExitCode> {
+    // Resolve the combination: from the private ledger (--ticket) or from the flags.
+    let (gm, era_id, whites, special) = match ticket {
+        Some(id) => {
+            let t = tickets::read_ledger(&cli.root)?
+                .into_iter()
+                .find(|t| t.ticket_id == id)
+                .with_context(|| format!("ticket {id} not in the ledger"))?;
+            let gm = Game::all()
+                .into_iter()
+                .find(|g| g.id() == t.game)
+                .with_context(|| format!("ticket {id}: unknown game {}", t.game))?;
+            (
+                gm,
+                Some(t.era_id.clone()),
+                t.whites().to_vec(),
+                Some(t.special),
+            )
+        }
+        None => (
+            game.context("--game is required without --ticket")?,
+            None,
+            whites.to_vec(),
+            special,
+        ),
+    };
+    let g = eras.game(gm.id())?;
+    let era = match &era_id {
+        Some(id) => g
+            .era
+            .iter()
+            .find(|e| &e.id == id)
+            .with_context(|| format!("era {id} not in eras.toml"))?,
+        None => g.current_era(),
+    };
+    // Archived draws are used only for the exact-past-winner check (popularity, not odds).
+    let draws = load_draws(cli, gm)?;
+    let r = lottotool::crowd::score(gm.id(), era, &whites, special, &draws)?;
+    if cli.json {
+        println!(
+            "{}",
+            json!({"ok": true, "ticket": ticket, "crowd": r, "weights": "judgment"})
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    let sp = match r.special {
+        Some(s) => format!(" {} {s}", special_label(gm.id())),
+        None => String::new(),
+    };
+    println!(
+        "crowd score {}/{} ({}) for {} whites {}{} (era {})",
+        r.score,
+        r.max_score,
+        r.band.to_uppercase(),
+        r.game,
+        fmt_balls(&r.whites),
+        sp,
+        r.era_id
+    );
+    for f in &r.factors {
+        println!(
+            "  {:14} {:>2}/{:<2}  {}  [{}]",
+            f.id, f.points, f.max, f.reason, f.basis
+        );
+    }
+    println!(
+        "  (higher = more likely to be shared with other players; heuristic, not measured data)"
+    );
+    println!("{}", lottotool::crowd::DISCLAIMER);
+    Ok(ExitCode::SUCCESS)
 }
 
 fn run_ticket(cli: &Cli, eras: &ErasFile, cmd: &TicketCmd) -> Result<ExitCode> {

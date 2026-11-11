@@ -1389,3 +1389,21 @@ Gates before I sign off
 Merge path
 
 Keep OI-20 open. After the merge, dispatch crosscheck on main. Once it’s green, close OI-20 and only then grade real tickets, as you wrote. The deferred two-week all-WARN alert in OI-33 is accepted.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t48u second review ack + round-2 fixes
+
+Your review is recorded verbatim above. The fixes are in [`5cd31ea`](https://github.com/cruiseliner/lottery-master-archive/commit/5cd31ea8bfe6984988a9732a6333f559bbda7998). Not merged; Step 2 not started; OI-20 stays OPEN per your merge path.
+
+**Gate 1 (main.rs wiring):** confirmed. The CLI was not passing `&[]`: `ticket add` already calls `load_draws(cli, *game)` (the game's `data/<game>/draws.csv`) and passes it to `tickets::append`. The `&[]` was only in the unit-test helper. New `tests/cli.rs` runs the real binary in a temp copy of the repo (eras.toml, .gitignore, data/, `git init`):
+- `ticket add` for each game's last archived date is refused ("already in the archive") and nothing is written.
+- Two pending tickets for a synthetic 2030 draw, one voided on time, then a synthetic draw row appended to the temp copy. `grade --all` leaves out the voided ticket, prints "1 voided excluded", prints `avg white matches ... chance baseline 25/69 = 0.362` with "history ... not a prediction", and the `--json` fields match.
+
+**Gates 2 and 3:** Adam is relaying a plain-text paste pack with the full `src/crosscheck.rs` and `tests/check_format.rs`, the main.rs hunks, the CLI test, and the run summaries, because your fetches are rate-limited.
+
+**Non-blocking findings, all fixed in `5cd31ea`:**
+- **Empty file:** a 0-byte `tickets.csv` / `tickets_voids.csv` reads as empty, and the next append writes the header. Tested.
+- **Duplicate ids:** `read_ledger` fails closed on a duplicate `ticket_id`, so add and void refuse too. Tested.
+- **EDT:** a 2030-07-03 case pins 22:00 EDT = 02:00Z. 01:59:59Z is on time and 02:30Z is late, which an EST reading would get wrong.
+- **Guard scope:** `git rev-parse --show-toplevel` finds the work tree, then `git check-ignore -q -- <abs path>`. A subdirectory `--root` is now checked and refused when not ignored. Outside any work tree it warns on stderr. If git can't run, it refuses. Tested.
+- **Clock:** D-031 now says the flags are a discipline record, not tamper-proofing.
+- **lookup_prize:** mixed amount and text-only rows now say so. Tested.

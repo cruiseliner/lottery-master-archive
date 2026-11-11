@@ -1439,3 +1439,23 @@ Non-blocking
 Merge path
 
 After the merge, dispatch crosscheck on main. Once it’s green, close OI-20 and only then grade real tickets. The deferred all-WARN alert in OI-33 is still accepted.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t49u third review ack + round-3 fixes
+
+Your review is recorded verbatim above. The fixes are in [`0d3f0a1`](https://github.com/cruiseliner/lottery-master-archive/commit/0d3f0a1f4c09e4c1587623144174561fff9ad7c0). Not merged; Step 2 not started; OI-20 stays OPEN per your merge path. Adam is relaying a short paste (`pr4-claude-paste-r3.md`) with the guard hunk and the tests.
+
+**Must-fix**
+- **LATE_ENTRY:** excluded from the white-match average, and the excluded count is printed (text and JSON `late_entry_excluded`). New CLI test `late_entry_tickets_are_excluded_from_the_measurement`: one late ticket and one on-time ticket; the average is 2.000 over n=1, with "1 LATE_ENTRY excluded".
+- **summarize:** take == 0 is a FAIL ("0/0 compared: no archived draws"), and ok == 0 is checked before the PASS branch. Test `zero_draws_is_never_a_vacuous_pass` also runs the workflow's own `case` block.
+
+**Guard (your three properties)**
+- **Git failure refuses.** Only git's own "not a git repository" (LC_ALL=C) means outside a work tree. Any other rev-parse failure refuses, and so does a `check-ignore` exit other than 0 or 1. Test `git_failure_refuses` covers a missing git binary, a fake git that fails with "dubious ownership", and a check-ignore exit of 128.
+- **Outside a work tree warns and proceeds.** CLI test `outside_a_git_work_tree_ticket_add_warns_and_proceeds`.
+- **Tracked ledger refused.** Test `tracked_ledger_is_refused_even_if_gitignored` uses `git add -f` and leaves the file byte-identical.
+
+**Non-blocking**
+- The flag line now branches on `gr.late_void`.
+- The Powerball page date is verified from the `<title>`. powerball.com serves the previous draw for a date with no draw. Checked live: PASS 2/2.
+- **Small-sample hint:** n, ±chance spread (per-ticket SD 0.562 PB / 0.559 MM, ÷√n), and "too few tickets (<30)".
+- **Scope:** the average covers all eligible graded tickets in the `--game`/`--draw-date` scope, labeled as such.
+- **Sorting:** `check_order_unique` FAILs `draws.sorted` unless draw dates are strictly ascending, and CI runs it. `grade` now takes the latest date with `max()` anyway.

@@ -746,8 +746,7 @@ fn run_grade(
     let ledger = tickets::read_ledger(&cli.root)?;
     let mut voided_excluded = 0usize;
     let mut grades = Vec::new();
-    // (game id, era baseline, baseline label) for the measurement line.
-    let mut baselines: Vec<(String, f64, String)> = Vec::new();
+    let mut measurement = Vec::new();
     for gm in Game::all() {
         if game.is_some_and(|g| g != gm) {
             continue;
@@ -762,13 +761,12 @@ fn run_grade(
         }
         let g = eras.game(gm.id())?;
         let era = g.current_era();
-        baselines.push((
-            gm.id().to_string(),
-            tickets::chance_white_baseline(era),
-            format!("{}/{}", era.white_count * era.white_count, era.white_max),
-        ));
         let draws = load_draws(cli, gm)?;
-        let latest = draws.last().map(|d| d.draw_date);
+        // Latest archived date by value, not by row position (the integrity check
+        // `draws.sorted` also FAILs a non-ascending draws.csv; src/check.rs check_order_unique).
+        let latest = draws.iter().map(|d| d.draw_date).max();
+        // Measurement over ALL eligible graded tickets in scope (not just the rows shown).
+        let (mut n, mut sum, mut late_excluded) = (0usize, 0usize, 0usize);
         for t in mine {
             let v = voids.iter().find(|v| v.ticket_id == t.ticket_id);
             // On-time voids are excluded; LATE_VOIDs stay graded and counted (D-031).
@@ -780,10 +778,41 @@ fn run_grade(
             }
             let cache = tickets::read_cache(&cli.root, gm, t.draw_date)?;
             let gr = tickets::grade(t, &draws, &cache, v)?;
+            if gr.status == GradeStatus::Graded {
+                if gr.late_entry {
+                    late_excluded += 1; // D-030: not scorecard/measurement eligible
+                } else {
+                    n += 1;
+                    sum += gr.white_matches.len();
+                }
+            }
             let default_pick = gr.status == GradeStatus::Pending || Some(t.draw_date) == latest;
             if all || draw_date.is_some() || default_pick {
                 grades.push(gr);
             }
+        }
+        if n + late_excluded > 0 {
+            let base = tickets::chance_white_baseline(era);
+            let sd = tickets::chance_white_sd(era);
+            let spread = if n > 0 {
+                sd / (n as f64).sqrt()
+            } else {
+                f64::NAN
+            };
+            measurement.push(json!({
+                "game": gm.id(),
+                "scope": match draw_date {
+                    Some(d) => format!("eligible graded tickets for {d}"),
+                    None => "all eligible graded tickets in the ledger".to_string(),
+                },
+                "eligible_tickets": n,
+                "late_entry_excluded": late_excluded,
+                "avg_white_matches": if n > 0 { Some(sum as f64 / n as f64) } else { None },
+                "chance_baseline": base,
+                "baseline_formula": format!("{}/{}", era.white_count * era.white_count, era.white_max),
+                "chance_spread_1sd": if n > 0 { Some(spread) } else { None },
+                "too_few_tickets": n < tickets::MIN_TICKETS_FOR_MEASUREMENT,
+            }));
         }
     }
     let pending = grades
@@ -793,23 +822,6 @@ fn run_grade(
     let prize_hits = grades.iter().filter(|g| g.prize_tier).count();
     let late_voids = grades.iter().filter(|g| g.late_void).count();
     let late_entries = grades.iter().filter(|g| g.late_entry).count();
-    // Measurement of past tickets vs the chance baseline k*k/n. History, not prediction.
-    let measurement: Vec<_> = baselines
-        .iter()
-        .filter_map(|(gid, base, label)| {
-            let graded: Vec<_> = grades
-                .iter()
-                .filter(|g| g.ticket.game == *gid && g.status == GradeStatus::Graded)
-                .collect();
-            if graded.is_empty() {
-                return None;
-            }
-            let avg = graded.iter().map(|g| g.white_matches.len()).sum::<usize>() as f64
-                / graded.len() as f64;
-            Some(json!({"game": gid, "graded_tickets": graded.len(),
-                "avg_white_matches": avg, "chance_baseline": base, "baseline_formula": label}))
-        })
-        .collect();
     if cli.json {
         println!(
             "{}",
@@ -830,7 +842,9 @@ fn run_grade(
         if gr.late_entry {
             flags.push("LATE_ENTRY".to_string());
         }
-        if let Some(v) = &gr.void {
+        if gr.late_void
+            && let Some(v) = &gr.void
+        {
             flags.push(format!("LATE_VOID {} ({})", v.voided_at, v.reason));
         }
         println!(
@@ -887,14 +901,34 @@ fn run_grade(
         late_entries
     );
     for m in &measurement {
-        println!(
-            "  {}: avg white matches {:.3} over {} graded ticket(s); chance baseline {} = {:.3}",
-            m["game"].as_str().unwrap_or(""),
-            m["avg_white_matches"].as_f64().unwrap_or(0.0),
-            m["graded_tickets"],
+        let gid = m["game"].as_str().unwrap_or("");
+        let n = m["eligible_tickets"].as_u64().unwrap_or(0);
+        let late = m["late_entry_excluded"].as_u64().unwrap_or(0);
+        let base = format!(
+            "chance baseline {} = {:.3}",
             m["baseline_formula"].as_str().unwrap_or(""),
             m["chance_baseline"].as_f64().unwrap_or(0.0)
         );
+        match (
+            m["avg_white_matches"].as_f64(),
+            m["chance_spread_1sd"].as_f64(),
+        ) {
+            (Some(avg), Some(spread)) => println!(
+                "  {gid} ({}): avg white matches {avg:.3} over n={n} ticket(s); {base}; chance spread ±{spread:.3} (1 SD){}; {late} LATE_ENTRY excluded",
+                m["scope"].as_str().unwrap_or(""),
+                if n < tickets::MIN_TICKETS_FOR_MEASUREMENT as u64 {
+                    format!(
+                        "; too few tickets (<{}) to read anything into",
+                        tickets::MIN_TICKETS_FOR_MEASUREMENT
+                    )
+                } else {
+                    String::new()
+                }
+            ),
+            _ => println!(
+                "  {gid}: no eligible graded tickets (n=0); {base}; {late} LATE_ENTRY excluded"
+            ),
+        }
     }
     if !measurement.is_empty() {
         println!("  (history of these tickets measured against chance; not a prediction)");

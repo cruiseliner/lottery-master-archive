@@ -80,7 +80,26 @@ pub fn parse_megamillions_winning_numbers(v: &Value, date: NaiveDate) -> Result<
 fn fetch_powerball_numbers(date: NaiveDate) -> Result<[u32; 6]> {
     let url = powerball_url(date, false, None).expect("national URL");
     let html = payouts::http_get_retry_public(&url, |b| b.contains("white-balls"))?;
+    // powerball.com serves the PREVIOUS draw for a date with no draw, so the page's own date
+    // must match (Claude t49u; megamillions already checks PlayDate).
+    let page = parse_powerball_page_date(&html)?;
+    if page != date {
+        bail!("powerball.com returned the {page} draw page, not {date}");
+    }
     parse_powerball_winning_numbers(&html)
+}
+
+/// Draw date from the page title, e.g. `<title>Powerball Draw Result - Mon, Nov 9, 2026 | ...`.
+pub fn parse_powerball_page_date(html: &str) -> Result<NaiveDate> {
+    let re =
+        Regex::new(r"<title>\s*Powerball Draw Result - [A-Za-z]{3}, ([A-Za-z]{3} \d{1,2}, \d{4})")
+            .unwrap();
+    let s = re
+        .captures(html)
+        .and_then(|c| c.get(1))
+        .ok_or_else(|| anyhow::anyhow!("draw date not found in powerball.com page title"))?
+        .as_str();
+    NaiveDate::parse_from_str(s, "%b %d, %Y").with_context(|| format!("page date {s:?}"))
 }
 
 fn fetch_megamillions_numbers(date: NaiveDate) -> Result<[u32; 6]> {
@@ -153,6 +172,23 @@ pub fn summarize(
     mismatches: &[String],
     errors: &[String],
 ) -> CheckResult {
+    // Never a vacuous PASS: nothing archived to compare (take == 0) is a FAIL (Claude t49u).
+    if take == 0 {
+        return r(
+            gid,
+            "crosscheck",
+            Status::Fail,
+            "0/0 compared: no archived draws to compare (empty draws.csv?)",
+        );
+    }
+    if ok == 0 && mismatches.is_empty() && errors.is_empty() {
+        return r(
+            gid,
+            "crosscheck",
+            Status::Fail,
+            format!("0/{take} compared: no successful official-source comparison"),
+        );
+    }
     if mismatches.is_empty() && errors.is_empty() {
         r(
             gid,
@@ -215,6 +251,22 @@ pub fn summarize(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn powerball_page_date_from_title() {
+        let html =
+            "<html><head><title>Powerball Draw Result - Mon, Nov 9, 2026 | Powerball</title>";
+        assert_eq!(
+            parse_powerball_page_date(html).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 11, 9).unwrap()
+        );
+        let html = "<title>Powerball Draw Result - Sat, Dec 26, 2026 | Powerball</title>";
+        assert_eq!(
+            parse_powerball_page_date(html).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 12, 26).unwrap()
+        );
+        assert!(parse_powerball_page_date("<title>Powerball</title>").is_err());
+    }
 
     #[test]
     fn parse_pb_html_fixture() {

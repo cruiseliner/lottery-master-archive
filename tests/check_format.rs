@@ -104,3 +104,16 @@ fn pass_line_has_no_annotation_and_summary_format_is_pinned() {
         "summary: 1 pass, 0 warn, 1 fail, 0 skip"
     );
 }
+
+#[test]
+fn zero_draws_is_never_a_vacuous_pass() {
+    let c = summarize("powerball", 0, 0, &[], &[]);
+    assert_eq!(c.status, Status::Fail);
+    let line = format_line(&c);
+    assert!(
+        line.starts_with("FAIL  powerball    crosscheck "),
+        "{line:?}"
+    );
+    assert!(line.contains("0/0 compared"), "{line:?}");
+    assert!(annotate(&line).starts_with("::error title=Crosscheck"));
+}

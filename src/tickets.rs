@@ -346,14 +346,30 @@ pub enum Guard {
 }
 
 pub fn guard_status(root: &Path, path: &Path) -> Result<Guard> {
-    let top = std::process::Command::new("git")
+    guard_status_with("git", root, path)
+}
+
+/// `guard_status` with an explicit git program (tests use a missing or failing fake git).
+/// Only git's own "not a git repository" answer means NotInRepo; any other git failure
+/// (cannot spawn, crash, safe.directory refusal, ...) is an error, so the write is refused.
+pub fn guard_status_with(git: &str, root: &Path, path: &Path) -> Result<Guard> {
+    let top = std::process::Command::new(git)
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--show-toplevel"])
+        .env("LC_ALL", "C") // stable English "not a git repository" text
         .output()
         .map_err(|e| anyhow!("cannot run git ({e}); refusing to write private tickets"))?;
     if !top.status.success() {
-        return Ok(Guard::NotInRepo);
+        let err = String::from_utf8_lossy(&top.stderr);
+        if err.contains("not a git repository") {
+            return Ok(Guard::NotInRepo);
+        }
+        bail!(
+            "git rev-parse failed ({}): {}; refusing to write private tickets",
+            top.status,
+            err.trim()
+        );
     }
     let top = String::from_utf8_lossy(&top.stdout).trim().to_string();
     let abs = if path.is_absolute() {
@@ -361,18 +377,20 @@ pub fn guard_status(root: &Path, path: &Path) -> Result<Guard> {
     } else {
         std::env::current_dir()?.join(path)
     };
-    let status = std::process::Command::new("git")
+    // check-ignore: 0 = ignored; 1 = not ignored OR tracked (tracked files are never reported
+    // as ignored), both refused; anything else (128 = fatal) is an error, also refused.
+    let status = std::process::Command::new(git)
         .arg("-C")
         .arg(&top)
         .args(["check-ignore", "-q", "--"])
         .arg(&abs)
         .status()
         .map_err(|e| anyhow!("cannot run git check-ignore ({e}); refusing to write"))?;
-    Ok(if status.success() {
-        Guard::Ignored
-    } else {
-        Guard::NotIgnored(top)
-    })
+    match status.code() {
+        Some(0) => Ok(Guard::Ignored),
+        Some(1) => Ok(Guard::NotIgnored(top)),
+        _ => bail!("git check-ignore failed ({status}); refusing to write private tickets"),
+    }
 }
 
 /// Validate and append one ticket. Existing bytes are never rewritten (append-only open).
@@ -453,6 +471,17 @@ pub fn is_late_void(t: &TicketRow, v: &VoidRow) -> Result<bool> {
 pub fn chance_white_baseline(era: &Era) -> f64 {
     crate::odds::Matrix::new(era.white_count, era.white_max, era.bonus_max).expected_white_matches()
 }
+
+/// Chance standard deviation of ONE ticket's white matches (hypergeometric):
+/// PB 69 ≈ 0.562, MM 70 ≈ 0.559. The spread of an average over n tickets is this / sqrt(n).
+pub fn chance_white_sd(era: &Era) -> f64 {
+    crate::odds::Matrix::new(era.white_count, era.white_max, era.bonus_max)
+        .variance_white_matches()
+        .sqrt()
+}
+
+/// Below this many eligible tickets the average is labeled "too few tickets".
+pub const MIN_TICKETS_FOR_MEASUREMENT: usize = 30;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

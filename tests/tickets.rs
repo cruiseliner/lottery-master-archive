@@ -6,8 +6,9 @@ use lottotool::data::{Draw, PayoutRow};
 use lottotool::eras::{ErasFile, GameDef};
 use lottotool::tickets::{
     GradeStatus, Guard, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, TicketRow, VOIDS_HEADER,
-    VoidRow, append as append_with, chance_white_baseline, grade as grade_with, guard_status,
-    is_late_void, ledger_path, lookup_prize, read_ledger, read_voids, validate, void, voids_path,
+    VoidRow, append as append_with, chance_white_baseline, chance_white_sd, grade as grade_with,
+    guard_status, guard_status_with, is_late_void, ledger_path, lookup_prize, read_ledger,
+    read_voids, validate, void, voids_path,
 };
 use std::path::{Path, PathBuf};
 
@@ -713,4 +714,88 @@ fn mixed_amount_and_text_rows_get_accurate_message() {
     assert!(txt.starts_with(TIER_LOOKUP_NEEDED));
     assert!(txt.contains("mix dollar amounts and text-only"), "{txt}");
     assert!(!txt.contains("more than one amount"));
+}
+
+// ------------------------------------------------------------------ round 3 (Claude t49u)
+
+#[test]
+fn git_failure_refuses() {
+    let root = tmp_root("git-missing");
+    let p = ledger_path(&root);
+    // git cannot be spawned at all.
+    let e = guard_status_with("/nonexistent/lottotool-no-git", &root, &p).unwrap_err();
+    assert!(e.to_string().contains("refusing"), "{e}");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // git runs but fails with something other than "not a git repository".
+        let fake = root.join("fake-git");
+        std::fs::write(
+            &fake,
+            "#!/bin/sh\necho 'fatal: detected dubious ownership' >&2\nexit 128\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let e = guard_status_with(fake.to_str().unwrap(), &root, &p).unwrap_err();
+        assert!(e.to_string().contains("refusing"), "{e}");
+        // check-ignore fatal (exit 128) after a good rev-parse also refuses.
+        let fake2 = root.join("fake-git2");
+        std::fs::write(
+            &fake2,
+            format!(
+                "#!/bin/sh\nif [ \"$3\" = rev-parse ]; then echo '{}'; exit 0; fi\nexit 128\n",
+                root.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&fake2, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let e = guard_status_with(fake2.to_str().unwrap(), &root, &p).unwrap_err();
+        assert!(e.to_string().contains("check-ignore failed"), "{e}");
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn tracked_ledger_is_refused_even_if_gitignored() {
+    if std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let top = tmp_root("tracked");
+    let git = |args: &[&str]| {
+        assert!(
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(&top)
+                .status()
+                .unwrap()
+                .success()
+        )
+    };
+    git(&["init", "-q"]);
+    std::fs::write(top.join(".gitignore"), "/ledger/\n").unwrap();
+    let g = game("powerball");
+    append(&top, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    // Force-track the private file: from now on the guard must refuse every write.
+    git(&["add", "-f", "ledger/tickets/tickets.csv"]);
+    let before = std::fs::read(ledger_path(&top)).unwrap();
+    assert!(matches!(
+        guard_status(&top, &ledger_path(&top)).unwrap(),
+        Guard::NotIgnored(_)
+    ));
+    let e = append(&top, &g, &pb(&[1, 2, 3, 4, 6], 6, false), before_draw()).unwrap_err();
+    assert!(e.to_string().contains("not gitignored"), "{e}");
+    assert_eq!(std::fs::read(ledger_path(&top)).unwrap(), before);
+    let _ = std::fs::remove_dir_all(&top);
+}
+
+#[test]
+fn chance_spread_per_ticket() {
+    let pb = game("powerball");
+    let mm = game("megamillions");
+    assert_eq!(format!("{:.3}", chance_white_sd(pb.current_era())), "0.562");
+    assert_eq!(format!("{:.3}", chance_white_sd(mm.current_era())), "0.559");
 }

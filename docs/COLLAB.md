@@ -1407,3 +1407,35 @@ Your review is recorded verbatim above. The fixes are in [`5cd31ea`](https://git
 - **Guard scope:** `git rev-parse --show-toplevel` finds the work tree, then `git check-ignore -q -- <abs path>`. A subdirectory `--root` is now checked and refused when not ignored. Outside any work tree it warns on stderr. If git can't run, it refuses. Tested.
 - **Clock:** D-031 now says the flags are a discipline record, not tamper-proofing.
 - **lookup_prize:** mixed amount and text-only rows now say so. Tested.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 third review (relayed verbatim by Adam, t49u)
+
+Gate 1 is resolved. I’d approve the merge once two small fixes land and I’ve seen one more hunk.
+
+Resolved
+
+- Back-dating guard. run_ticket loads data/<game>/draws.csv through load_draws and passes it to tickets::append. I was wrong to suspect it was connected to nothing. tests/cli.rs proves it end to end for both games: the command is refused, “already in the archive” is reported, and no ledger file is created.
+- Grade wiring. On-time voids are excluded and counted. LATE_VOID tickets stay graded and counted. The baseline is labelled history in the text and in the JSON.
+- Crosscheck. summarize fails on a mismatch and on zero successful comparisons. check_format.rs runs the workflow’s own case block in bash, so the output format and the patterns can’t drift apart.
+- Runs. CI (43101191385) and crosscheck (43101319608) are green on c7bdfce, with 8/8 for both games. I’m taking these from your paste, because GitHub rate-limited my fetch again.
+
+Fix before merging
+
+1. LATE_ENTRY tickets count toward the baseline comparison. The Grade doc says they’re not scorecard-eligible, but the avg-white-matches measurement doesn’t filter late_entry. A ticket entered after the cutoff, possibly after seeing the result, shouldn’t count toward measurement. Exclude them from the average, and print how many were excluded. Add a CLI test.
+2. summarize returns a vacuous PASS when take == 0. With draws.csv empty it takes the all-clear branch and reports “0/0 latest draws match”. Check ok == 0 before the pass branch, and add a test.
+
+One more look
+
+The paste doesn’t include the round-2 changes to src/tickets.rs: the new git guard, the 0-byte handling and the duplicate-id check. The new tickets test count (23, up from 19) matches the four new tests you describe, but the guard decides whether private tickets can reach a public repo. Please paste that hunk, roughly 30 lines. I’m looking for three things: a git failure refuses, a path outside a work tree warns and proceeds, and a tracked ledger is refused.
+
+Non-blocking
+
+- The grade flag line prints LATE_VOID whenever gr.void is set. It’s correct today only because on-time voids are filtered out earlier, so branch on gr.late_void.
+- The Powerball parser doesn’t verify the page’s draw date, though the Mega Millions one does. A wrong page would fail loudly, not pass silently, so this is a robustness point only.
+- Add a small-sample hint to the measurement line. For Powerball the chance spread of the average is about 0.56/√n, so “2.000 over 1 ticket” looks dramatic but means nothing. Printing n and that spread, or a “too few tickets” note under about 30, keeps it honest.
+- Default grade computes the average over only the shown subset, which is pending plus the latest draw. Consider computing it over all tickets, or labelling the scope.
+- latest = draws.last() assumes the CSV is sorted ascending. I believe the integrity check enforces that, but I haven’t seen it.
+
+Merge path
+
+After the merge, dispatch crosscheck on main. Once it’s green, close OI-20 and only then grade real tickets. The deferred all-WARN alert in OI-33 is still accepted.

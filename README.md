@@ -91,9 +91,11 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
   the cache has no single unambiguous amount for the tier (no cache, jackpot / pari-mutuel
   text, several amounts), `grade` prints `TIER_LOOKUP_NEEDED`; it never computes or invents an
   amount. Grades are computed on demand and never written back into the ledger.
-* `grade` also prints each game's average white matches over the graded tickets shown, next to
-  the chance baseline k²/n (25/69 ≈ 0.362 Powerball, 25/70 ≈ 0.357 Mega Millions). This is a
-  measurement of past tickets, labeled as history, not a prediction.
+* `grade` also prints each game's average white matches over **all eligible graded tickets** in
+  the `--game`/`--draw-date` scope (not only the rows shown), next to the chance baseline k²/n
+  (25/69 ≈ 0.362 Powerball, 25/70 ≈ 0.357 Mega Millions), with n, the chance spread of the
+  average (≈ 0.56/√n) and a "too few tickets (<30)" note. `LATE_ENTRY` tickets are excluded
+  and counted. This is a measurement of past tickets, labeled as history, not a prediction.
 * Nothing here predicts numbers. A grade is a record of what happened, not a strategy.
 
 ## Automation

@@ -22,6 +22,10 @@ fn copy_dir(src: &Path, dst: &Path) {
 }
 
 fn temp_repo(name: &str) -> PathBuf {
+    temp_copy(name, true)
+}
+
+fn temp_copy(name: &str, git: bool) -> PathBuf {
     let src = Path::new(env!("CARGO_MANIFEST_DIR"));
     let root = std::env::temp_dir().join(format!(
         "lottotool-cli-{}-{}-{name}",
@@ -36,7 +40,7 @@ fn temp_repo(name: &str) -> PathBuf {
     std::fs::copy(src.join("eras.toml"), root.join("eras.toml")).unwrap();
     std::fs::copy(src.join(".gitignore"), root.join(".gitignore")).unwrap();
     copy_dir(&src.join("data"), &root.join("data"));
-    if Command::new("git").arg("--version").output().is_ok() {
+    if git && Command::new("git").arg("--version").output().is_ok() {
         assert!(
             Command::new("git")
                 .args(["init", "-q"])
@@ -157,7 +161,7 @@ fn grade_excludes_on_time_voids_counts_them_and_labels_baseline_as_history() {
         "{out}"
     );
     assert!(
-        out.contains("powerball: avg white matches 2.000 over 1 graded ticket(s); chance baseline 25/69 = 0.362"),
+        out.contains("powerball (all eligible graded tickets in the ledger): avg white matches 2.000 over n=1 ticket(s); chance baseline 25/69 = 0.362; chance spread ±0.562 (1 SD); too few tickets (<30) to read anything into; 0 LATE_ENTRY excluded"),
         "{out}"
     );
     assert!(out.contains("history of these tickets measured against chance; not a prediction"));
@@ -167,11 +171,124 @@ fn grade_excludes_on_time_voids_counts_them_and_labels_baseline_as_history() {
     assert_eq!(v["voided_excluded"], 1);
     assert_eq!(v["graded"], 1);
     assert_eq!(v["white_match_measurement"][0]["baseline_formula"], "25/69");
+    assert_eq!(v["white_match_measurement"][0]["eligible_tickets"], 1);
+    assert_eq!(v["white_match_measurement"][0]["too_few_tickets"], true);
     assert!(
         v["measurement_note"]
             .as_str()
             .unwrap()
             .contains("not a prediction")
     );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Remove the last row of a temp copy's draws.csv; returns (draw_date, removed line).
+fn pop_last_draw(root: &Path, game: &str) -> (String, String) {
+    let p = root.join("data").join(game).join("draws.csv");
+    let csv = std::fs::read_to_string(&p).unwrap();
+    let mut lines: Vec<&str> = csv.lines().collect();
+    let last = lines.pop().unwrap().to_string();
+    std::fs::write(&p, lines.join("\n") + "\n").unwrap();
+    (last.split(',').next().unwrap().to_string(), last)
+}
+
+#[test]
+fn late_entry_tickets_are_excluded_from_the_measurement() {
+    let root = temp_repo("late-entry");
+    // Pretend the latest PB draw is not archived yet: its 22:00 ET cutoff is in the past, so a
+    // ticket added now is accepted but LATE_ENTRY (D-030).
+    let (late_date, row) = pop_last_draw(&root, "powerball");
+    let o = run(
+        &root,
+        &[
+            "ticket",
+            "add",
+            "--game",
+            "pb",
+            "--draw-date",
+            &late_date,
+            "--whites",
+            "1,2,3,4,5",
+            "--special",
+            "6",
+        ],
+    );
+    assert!(o.status.success(), "{:?}", text(&o));
+    // One on-time ticket for a synthetic 2030 draw.
+    let o = run(
+        &root,
+        &[
+            "ticket",
+            "add",
+            "--game",
+            "pb",
+            "--draw-date",
+            "2030-01-02",
+            "--whites",
+            "10,20,3,4,5",
+            "--special",
+            "6",
+        ],
+    );
+    assert!(o.status.success(), "{:?}", text(&o));
+    // Archive both draws in the temp copy (restore the real row + one synthetic row).
+    let p = root.join("data/powerball/draws.csv");
+    let mut csv = std::fs::read_to_string(&p).unwrap();
+    csv.push_str(&format!(
+        "{row}\n2030-01-02,pb-2015,10,20,30,40,50,26,2,,,,,,,test:fake\n"
+    ));
+    std::fs::write(&p, csv).unwrap();
+
+    let o = run(&root, &["grade", "--all", "--game", "pb"]);
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    assert!(
+        out.contains(&format!("T0001 powerball {late_date}")),
+        "{out}"
+    );
+    assert!(out.contains("[LATE_ENTRY]"), "{out}");
+    assert!(out.contains("2 graded, 0 pending"), "{out}");
+    assert!(out.contains("1 LATE_ENTRY"), "{out}");
+    // Only the on-time ticket (2 matches) counts: avg 2.000 over n=1, one excluded.
+    assert!(
+        out.contains("avg white matches 2.000 over n=1 ticket(s)"),
+        "late entry must not count toward the average:\n{out}"
+    );
+    assert!(out.contains("1 LATE_ENTRY excluded"), "{out}");
+
+    let o = run(&root, &["--json", "grade", "--all", "--game", "pb"]);
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let m = &v["white_match_measurement"][0];
+    assert_eq!(m["eligible_tickets"], 1);
+    assert_eq!(m["late_entry_excluded"], 1);
+    assert_eq!(m["avg_white_matches"], 2.0);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn outside_a_git_work_tree_ticket_add_warns_and_proceeds() {
+    let root = temp_copy("no-git", false);
+    let o = run(
+        &root,
+        &[
+            "ticket",
+            "add",
+            "--game",
+            "pb",
+            "--draw-date",
+            "2030-01-02",
+            "--whites",
+            "1,2,3,4,5",
+            "--special",
+            "6",
+        ],
+    );
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    assert!(
+        err.contains("not inside a git work tree; gitignore guard not applicable"),
+        "{err}"
+    );
+    assert!(root.join("ledger/tickets/tickets.csv").exists());
     let _ = std::fs::remove_dir_all(&root);
 }

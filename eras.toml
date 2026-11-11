@@ -79,6 +79,7 @@ bonus_group = "pb-bonus-26"
 matrix_status = "sourced"
 price_usd = 2
 price_status = "sourced"
+power_play_price_usd = 1        # sourced: Florida Lottery Powerball rules PDF (same source as price_usd); used by `ticket add` (D-031)
 multiplier = "Power Play +$1 (10X only when the advertised jackpot is $150M or less); Double Play +$1 where offered"
 source = "NY Lottery release and Vermont Powerball rules ('Effective October 7, 2015'); Florida Lottery Powerball rules PDF (prices, Power Play, published odds); retrieved 2026-10-23"
 notes = "Current era. Published odds reproduced exactly by `cargo test` (tests/odds.rs)."

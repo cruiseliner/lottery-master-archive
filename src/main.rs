@@ -5,6 +5,7 @@ use lottotool::check::{self, Status};
 use lottotool::data::{self, DRAWS_HEADER, Draw, MISSING_HEADER, MissingRow};
 use lottotool::eras::ErasFile;
 use lottotool::odds::{Matrix, PRIZE_TIERS};
+use lottotool::tickets::{self, GradeStatus, NewTicket};
 use lottotool::{Game, export, ingest_log, ny, payouts, rng, summary};
 use serde_json::json;
 use std::path::PathBuf;
@@ -103,6 +104,55 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Private ticket ledger for tickets actually bought (gitignored ledger/tickets/; D-031).
+    Ticket {
+        #[command(subcommand)]
+        cmd: TicketCmd,
+    },
+    /// Check ledger tickets against the archive draws: matches, prize tier, cached amount.
+    /// Default: pending tickets plus tickets for each game's latest archived draw.
+    Grade {
+        #[arg(long)]
+        game: Option<Game>,
+        #[arg(long)]
+        draw_date: Option<NaiveDate>,
+        /// Grade every ticket in the ledger.
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TicketCmd {
+    /// Validate a bought ticket against eras.toml and append it to the private ledger.
+    Add {
+        #[arg(long)]
+        game: Game,
+        #[arg(long)]
+        draw_date: NaiveDate,
+        /// Five white balls, comma-separated (e.g. 3,14,22,41,60).
+        #[arg(long, value_delimiter = ',', required = true)]
+        whites: Vec<u32>,
+        /// Powerball / Mega Ball.
+        #[arg(long)]
+        special: u32,
+        /// Power Play add-on (Powerball only; price from eras.toml).
+        #[arg(long)]
+        power_play: bool,
+        /// Amount paid in whole USD; must equal the eras.toml price if given.
+        #[arg(long)]
+        cost: Option<u32>,
+        /// Free-text note (single line; stays in the private ledger).
+        #[arg(long, default_value = "")]
+        note: String,
+    },
+    /// List tickets in the private ledger.
+    List {
+        #[arg(long)]
+        game: Option<Game>,
+        #[arg(long)]
+        draw_date: Option<NaiveDate>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -127,6 +177,12 @@ fn load_draws(cli: &Cli, game: Game) -> Result<Vec<Draw>> {
 fn run(cli: &Cli) -> Result<ExitCode> {
     let eras = ErasFile::load(&cli.root.join("eras.toml"))?;
     match &cli.cmd {
+        Cmd::Ticket { cmd } => run_ticket(cli, &eras, cmd),
+        Cmd::Grade {
+            game,
+            draw_date,
+            all,
+        } => run_grade(cli, &eras, *game, *draw_date, *all),
         Cmd::Update {
             game,
             payouts: true,
@@ -541,6 +597,199 @@ fn run(cli: &Cli) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
     }
+}
+
+fn fmt_balls(w: &[u32]) -> String {
+    w.iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn special_label(game: &str) -> &'static str {
+    if game == "powerball" { "PB" } else { "MB" }
+}
+
+fn run_ticket(cli: &Cli, eras: &ErasFile, cmd: &TicketCmd) -> Result<ExitCode> {
+    match cmd {
+        TicketCmd::Add {
+            game,
+            draw_date,
+            whites,
+            special,
+            power_play,
+            cost,
+            note,
+        } => {
+            let g = eras.game(game.id())?;
+            let t = NewTicket {
+                game: *game,
+                draw_date: *draw_date,
+                whites: whites.clone(),
+                special: *special,
+                power_play: *power_play,
+                cost_usd: *cost,
+                note: note.clone(),
+            };
+            let row = tickets::append(&cli.root, g, &t, Utc::now())?;
+            if cli.json {
+                println!(
+                    "{}",
+                    json!({"ok": true, "ticket": row, "ledger": "private (gitignored)"})
+                );
+            } else {
+                println!(
+                    "added {} {} {} whites {} {} {}{} ${} (created_at {})",
+                    row.ticket_id,
+                    row.game,
+                    row.draw_date,
+                    fmt_balls(&row.whites()),
+                    special_label(&row.game),
+                    row.special,
+                    if row.power_play { " +Power Play" } else { "" },
+                    row.cost_usd,
+                    row.created_at
+                );
+                println!(
+                    "ledger: {} (gitignored; append-only)",
+                    tickets::ledger_path(&cli.root).display()
+                );
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        TicketCmd::List { game, draw_date } => {
+            let rows: Vec<_> = tickets::read_ledger(&cli.root)?
+                .into_iter()
+                .filter(|r| game.is_none_or(|g| r.game == g.id()))
+                .filter(|r| draw_date.is_none_or(|d| r.draw_date == d))
+                .collect();
+            if cli.json {
+                println!("{}", json!({"ok": true, "tickets": rows}));
+            } else {
+                for r in &rows {
+                    println!(
+                        "{} {:12} {} whites {} {} {}{} ${}{}",
+                        r.ticket_id,
+                        r.game,
+                        r.draw_date,
+                        fmt_balls(&r.whites()),
+                        special_label(&r.game),
+                        r.special,
+                        if r.power_play { " +PP" } else { "" },
+                        r.cost_usd,
+                        if r.note.is_empty() {
+                            String::new()
+                        } else {
+                            format!("  # {}", r.note)
+                        }
+                    );
+                }
+                println!("{} ticket(s)", rows.len());
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+    }
+}
+
+fn run_grade(
+    cli: &Cli,
+    eras: &ErasFile,
+    game: Option<Game>,
+    draw_date: Option<NaiveDate>,
+    all: bool,
+) -> Result<ExitCode> {
+    let ledger = tickets::read_ledger(&cli.root)?;
+    let mut grades = Vec::new();
+    for gm in Game::all() {
+        if game.is_some_and(|g| g != gm) {
+            continue;
+        }
+        let mine: Vec<_> = ledger
+            .iter()
+            .filter(|t| t.game == gm.id())
+            .filter(|t| draw_date.is_none_or(|d| t.draw_date == d))
+            .collect();
+        if mine.is_empty() {
+            continue;
+        }
+        let g = eras.game(gm.id())?;
+        let draws = load_draws(cli, gm)?;
+        let latest = draws.last().map(|d| d.draw_date);
+        for t in mine {
+            let cache = tickets::read_cache(&cli.root, gm, t.draw_date)?;
+            let gr = tickets::grade(g, t, &draws, &cache)?;
+            let default_pick = gr.status == GradeStatus::Pending || Some(t.draw_date) == latest;
+            if all || draw_date.is_some() || default_pick {
+                grades.push(gr);
+            }
+        }
+    }
+    let pending = grades
+        .iter()
+        .filter(|g| g.status == GradeStatus::Pending)
+        .count();
+    let prize_hits = grades.iter().filter(|g| g.prize_tier).count();
+    if cli.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({"ok": true, "grades": grades,
+                "graded": grades.len() - pending, "pending": pending, "prize_tier_hits": prize_hits,
+                "note": "computed on demand; nothing written to the ledger"}))?
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    for gr in &grades {
+        let t = &gr.ticket;
+        let sp = special_label(&t.game);
+        println!(
+            "{} {} {} ticket {} {} {}{}",
+            t.ticket_id,
+            t.game,
+            t.draw_date,
+            fmt_balls(&t.whites()),
+            sp,
+            t.special,
+            if t.power_play { " +PP" } else { "" }
+        );
+        match gr.status {
+            GradeStatus::Pending => println!("  PENDING: draw not in archive yet"),
+            GradeStatus::Graded => {
+                println!(
+                    "  drawn  {} {} {}{}",
+                    fmt_balls(&gr.drawn_whites.unwrap_or_default()),
+                    sp,
+                    gr.drawn_special.unwrap_or_default(),
+                    gr.multiplier_note
+                        .as_ref()
+                        .map(|m| format!("  [{m}]"))
+                        .unwrap_or_default()
+                );
+                println!(
+                    "  match  {} white ({}) {} {}  tier {}  {}",
+                    gr.white_matches.len(),
+                    if gr.white_matches.is_empty() {
+                        "-".into()
+                    } else {
+                        fmt_balls(&gr.white_matches)
+                    },
+                    sp,
+                    if gr.special_match { "yes" } else { "no" },
+                    gr.tier.clone().unwrap_or_default(),
+                    gr.prize
+                );
+            }
+        }
+        if gr.entered_after_draw {
+            println!("  note: ticket entered at/after the official draw time");
+        }
+    }
+    println!(
+        "{} graded, {} pending, {} in a prize tier",
+        grades.len() - pending,
+        pending,
+        prize_hits
+    );
+    Ok(ExitCode::SUCCESS)
 }
 
 fn write_changes_md(

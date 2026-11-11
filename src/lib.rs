@@ -14,6 +14,7 @@ pub mod odds;
 pub mod payouts;
 pub mod rng;
 pub mod summary;
+pub mod tickets;
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +22,9 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Game {
+    #[value(alias = "pb")]
     Powerball,
+    #[value(alias = "mm")]
     Megamillions,
 }
 

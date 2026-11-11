@@ -41,6 +41,36 @@ cargo build --release
   (powerball.com draw-result pages, megamillions.com draw API) into the **gitignored `cache/`**.
   Those tables are never committed (see Limitations).
 
+### Ticket ledger and grade (v0.2 Step 1, D-031)
+
+A private, append-only ledger for tickets you actually bought, checked against the archive.
+
+```
+lottotool ticket add --game pb --draw-date 2026-11-11 --whites 3,14,22,41,60 --special 9 --power-play [--cost 3] [--note "..."]
+lottotool ticket add --game mm --draw-date 2026-11-13 --whites 7,8,9,10,11 --special 12
+lottotool ticket list [--game pb] [--draw-date YYYY-MM-DD]
+lottotool grade                     # pending tickets + tickets for each game's latest archived draw
+lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
+```
+
+* `pb` / `mm` are aliases for `powerball` / `megamillions`.
+* The ledger is `ledger/tickets/tickets.csv` under the **gitignored `ledger/`**. Rows are only
+  appended (never rewritten); `created_at` is UTC. `ticket add` refuses to write if the ledger
+  path is not gitignored, and fails closed on an unexpected header.
+* `ticket add` validates against `eras.toml` for the draw date: scheduled draw weekday, ball
+  ranges, five distinct whites, Power Play only for Powerball, and the price (`price_usd`, plus
+  `power_play_price_usd`). `--cost`, if given, must equal that price. Only eras whose prize
+  chart is encoded (`pb-2015`, `mm-2025`) are accepted.
+* `grade` reports white matches, special-ball match, the tier (e.g. `3+1`), whether it is a
+  prize tier on the current chart, and the archive multiplier (Powerball Power Play) when the
+  ticket has it and the archive row has a value. A special ball only matches the drawn special
+  ball, never a drawn white. Draws not yet in `data/` are `PENDING`.
+* Prize **amounts** come only from the private payout cache (`update <game> --payouts`). If
+  the cache has no single unambiguous amount for the tier (no cache, jackpot / pari-mutuel
+  text, several amounts), `grade` prints `TIER_LOOKUP_NEEDED`; it never computes or invents an
+  amount. Grades are computed on demand and never written back into the ledger.
+* Nothing here predicts numbers. A grade is a record of what happened, not a strategy.
+
 ## Automation
 
 * `.github/workflows/update.yml` runs daily at 06:17 America/New_York (after every draw night):
@@ -76,7 +106,7 @@ discrepancy. See `data/SOURCES.md`.
 * Draw-day schedules before the first sourced change are inferred from the data.
 * The scheduler can be delayed or skipped by GitHub under load. Staleness turns the workflow red
   rather than hiding the problem.
-* There are no tax, annuity or jackpot-size calculations in v0.1.
+* There are no tax, annuity, expected-value or jackpot-size calculations yet (v0.2 Step 4, not started).
 
 ## Roadmap
 

@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Added (2026-11-11 — v0.2 Step 1, D-031)
+- `lottotool ticket add|list` and `lottotool grade`: private append-only ticket ledger (`ledger/tickets/tickets.csv`, gitignored) checked against the archive; tiers from the encoded current charts, amounts only from the private payout cache, else `TIER_LOOKUP_NEEDED`; pending draws reported as `PENDING`.
+- `eras.toml`: optional `power_play_price_usd` (pb-2015 = 1); `pb` / `mm` CLI aliases.
+- tests/tickets.rs (fake data, temp dirs). OI-33 lists deferred items; OI-20 is a merge gate.
+
 ### Changed (2026-10-24 morning — t235u schedule facts + t236u coverage audit)
 - COLLAB: t236u brief pasted verbatim into FROM CLAUDE; t235u body missing from handoff (noted, not invented). FOR CLAUDE: 655e6cc push proxy time, Phase 1 single-cron schedule form, event=schedule=0; coverage audit summary + file links.
 - docs: `COVERAGE_AUDIT.md` — archive vs NY feeds (scratch), range/schedule checks; only gap MM 2026-10-23 missing_from_archive.

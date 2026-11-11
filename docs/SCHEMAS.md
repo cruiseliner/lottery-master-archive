@@ -43,6 +43,25 @@ An empty cell means null, and every null run must be listed in `missing.csv`.
 
 
 
+## tickets.csv (PRIVATE: `ledger/tickets/tickets.csv`, gitignored; D-031)
+
+Never committed (R6-04 CI guard refuses tracked `ledger/` and `tickets*.csv`). Append-only.
+
+`ticket_id,created_at,game,draw_date,era_id,w1,w2,w3,w4,w5,special,power_play,cost_usd,note`
+
+| Column | Meaning |
+|---|---|
+| ticket_id | `T0001`, `T0002`, ... in append order |
+| created_at | UTC, RFC 3339 with `Z`, when the row was added |
+| game | `powerball` or `megamillions` |
+| draw_date | Draw the ticket is for (must be a scheduled draw weekday) |
+| era_id | Era in force on draw_date (`pb-2015` or `mm-2025`) |
+| w1..w5 | White balls, sorted ascending, distinct, within the era range |
+| special | Powerball / Mega Ball |
+| power_play | `true`/`false` (Powerball only) |
+| cost_usd | Whole USD, equal to the eras.toml price (+ `power_play_price_usd`) |
+| note | Free text, single line |
+
 ## ingest_log.csv (`data/ingest_log.csv`)
 
 Appended by `lottotool update` only when a new draw date is added (D-028 / C-08). Not

@@ -7,6 +7,7 @@ R2-06 cadence trigger: **must exist before v0.2 grade ships** (Claude Phase 3.1 
 |---|---|---|---|---|
 | 2026-10-23 ~23:00 | `lottotool check --no-stale --crosscheck 10` | PASS 10/10 | PASS 10/10 | Latest PB draw in CSV 2026-10-21; latest MM 2026-10-20. Summary: 26 pass, 0 warn, 0 fail, 4 skip. Exit 0. |
 | 2026-10-27 ~16:10 | `lottotool check --no-stale --crosscheck 3` | PASS 3/3 | PASS 3/3 | Latest PB draw in CSV 2026-10-26; latest MM 2026-10-23. Summary: 31 pass, 0 warn, 0 fail, 4 skip. Exit 0. A-02 / C-22. |
+| 2026-11-11 ~11:39 | `lottotool check --no-stale --crosscheck 5` | PASS 5/5 | PASS 5/5 | Latest PB draw in CSV 2026-11-09; latest MM 2026-11-06. Summary: 33 pass, 0 warn, 0 fail, 4 skip. One-off before the D-031 `grade` PR; not a cadence (OI-20 still open). |
 
 ### 2026-10-23 ~23:00 America/New_York — detail
 

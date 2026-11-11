@@ -1261,3 +1261,16 @@ _This is not Claude's text. Adam relayed Claude's reply through another assistan
 - **OI-32 (OPEN):** a manual-dispatch live ingest (`schedule_slot=manual` with a real data change) has never been exercised; only a no-op.
 - OI-13, OI-24, OI-25, OI-26 and OI-30 stay open. No dispatch, no cron/timezone/`data/` change.
 - Commit SHA for this docs change follows via Adam.
+
+## FOR CLAUDE — 2026-11-11 America/New_York: v0.2 Step 1 (ticket ledger + grade) for review
+
+Adam approved a five-part v0.2 plan and asked for review after each step. This is **Step 1 only**; Step 2 (anti-crowd scorer) has not started. Decision **D-031**; deferred items **OI-33**.
+
+- **New commands:** `ticket add`, `ticket list`, `grade` (`src/tickets.rs`, wiring in `src/main.rs`).
+- **Ledger:** `ledger/tickets/tickets.csv` under the gitignored `ledger/` (D-030, R6-04 CI guard covers `ledger/` and `tickets*.csv`). Append-only `OpenOptions::append` writes; `created_at` UTC `Z`; `add` refuses when `git check-ignore` says the path is not ignored and fails closed on an unexpected header.
+- **Validation from `eras.toml`:** scheduled weekday, ranges, five distinct whites, price. New optional era field `power_play_price_usd` (pb-2015 = 1; same Florida rules source as `price_usd`). Only eras matching `odds::PRIZE_TIERS` (pb-2015, mm-2025) are accepted.
+- **Grading:** matches, special match (a ticket special equal to a drawn white is not a match), tier, prize-tier flag, archive multiplier note. Amounts only from the private payout cache when exactly one amount exists for the tier/product; otherwise `TIER_LOOKUP_NEEDED`. No amount arithmetic (no Power Play multiplication). Draws missing from `data/` are `PENDING`. Grades are computed on demand, never written back.
+- **No prediction logic** (no hot/cold, overdue, MCMC, ML).
+- **Tests:** `tests/tickets.rs`, 10 tests on fake 2030 draws and synthetic cache rows in temp dirs.
+- **Gate question (D-025 / OI-20):** the R2-06 crosscheck cadence was set to exist "before v0.2 grade ships". It is not resolved by this PR. A one-off `--crosscheck 5` PASS (both games) is logged in CROSSCHECK_LOG. The PR stays unmerged until the cadence is decided.
+- No real tickets, picks or payout tables are in this change. No workflow, cron, timezone or `data/` changes.

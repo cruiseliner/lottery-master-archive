@@ -186,7 +186,18 @@ pub fn validate(g: &GameDef, t: &NewTicket) -> Result<(String, u32)> {
 /// Read the ledger, failing closed on a wrong header or unparseable row.
 /// A missing file is an empty ledger.
 pub fn read_ledger(root: &Path) -> Result<Vec<TicketRow>> {
-    read_checked(&ledger_path(root), TICKETS_HEADER)
+    let rows: Vec<TicketRow> = read_checked(&ledger_path(root), TICKETS_HEADER)?;
+    let mut seen = std::collections::HashSet::new();
+    for r in &rows {
+        if !seen.insert(r.ticket_id.as_str()) {
+            bail!(
+                "{}: duplicate ticket_id {} (refusing to read or append)",
+                ledger_path(root).display(),
+                r.ticket_id
+            );
+        }
+    }
+    Ok(rows)
 }
 
 /// Read void records, failing closed on a wrong header, an unknown ticket id, or a duplicate.
@@ -209,8 +220,12 @@ pub fn read_voids(root: &Path) -> Result<Vec<VoidRow>> {
 }
 
 fn read_checked<T: for<'de> Deserialize<'de>>(p: &Path, expected: &str) -> Result<Vec<T>> {
-    if !p.exists() {
-        return Ok(Vec::new());
+    // Missing or 0-byte (crash after open, before the first write) = empty, like append_record.
+    match std::fs::metadata(p) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(|| format!("stat {}", p.display())),
+        Ok(m) if m.len() == 0 => return Ok(Vec::new()),
+        Ok(_) => {}
     }
     // A partial last line (crash mid-append) fails closed on every read, not just on append.
     ensure_ends_with_newline(p)?;
@@ -299,27 +314,65 @@ pub fn void(root: &Path, ticket_id: &str, reason: &str, now: DateTime<Utc>) -> R
     Ok(row)
 }
 
-/// Refuse to write the ledger if `root` is a git work tree and the ledger path is not ignored.
+/// Git guard (D-031). Finds the enclosing work tree with `git rev-parse --show-toplevel`
+/// (so a `--root` inside a subdirectory is still checked) and refuses unless
+/// `git check-ignore` says the ledger path is ignored. Outside any git work tree there is
+/// nothing to commit to, so the write is allowed with a warning on stderr (never silently).
+/// If git cannot be run at all, the write is refused.
 fn ensure_gitignored(root: &Path, path: &Path) -> Result<()> {
-    if !root.join(".git").exists() {
-        return Ok(());
+    match guard_status(root, path)? {
+        Guard::Ignored => Ok(()),
+        Guard::NotInRepo => {
+            eprintln!(
+                "warning: {} is not inside a git work tree; gitignore guard not applicable",
+                root.display()
+            );
+            Ok(())
+        }
+        Guard::NotIgnored(top) => bail!(
+            "{} is not gitignored in work tree {}; refusing to write private tickets",
+            path.display(),
+            top
+        ),
     }
-    let status = std::process::Command::new("git")
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Guard {
+    Ignored,
+    NotInRepo,
+    /// Inside the work tree with this top-level, but the path is not ignored (or is tracked).
+    NotIgnored(String),
+}
+
+pub fn guard_status(root: &Path, path: &Path) -> Result<Guard> {
+    let top = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
-        .arg("check-ignore")
-        .arg("-q")
-        .arg(path.strip_prefix(root).unwrap_or(path))
-        .status();
-    match status {
-        Ok(s) if s.success() => Ok(()),
-        Ok(_) => bail!(
-            "{} is not gitignored in {}; refusing to write private tickets",
-            path.display(),
-            root.display()
-        ),
-        Err(e) => bail!("cannot run git check-ignore ({e}); refusing to write private tickets"),
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .map_err(|e| anyhow!("cannot run git ({e}); refusing to write private tickets"))?;
+    if !top.status.success() {
+        return Ok(Guard::NotInRepo);
     }
+    let top = String::from_utf8_lossy(&top.stdout).trim().to_string();
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&top)
+        .args(["check-ignore", "-q", "--"])
+        .arg(&abs)
+        .status()
+        .map_err(|e| anyhow!("cannot run git check-ignore ({e}); refusing to write"))?;
+    Ok(if status.success() {
+        Guard::Ignored
+    } else {
+        Guard::NotIgnored(top)
+    })
 }
 
 /// Validate and append one ticket. Existing bytes are never rewritten (append-only open).
@@ -496,10 +549,17 @@ pub fn lookup_prize(
     let mut amounts: Vec<u64> = tier_rows.iter().filter_map(|r| r.prize_usd).collect();
     amounts.sort_unstable();
     amounts.dedup();
+    let all_have_amount = tier_rows.iter().all(|r| r.prize_usd.is_some());
     match amounts.as_slice() {
-        [a] if tier_rows.iter().all(|r| r.prize_usd.is_some()) => (
+        [a] if all_have_amount => (
             Some(*a),
             format!("${a} (private cache, product {})", tier_rows[0].product),
+        ),
+        [_, ..] if !all_have_amount => (
+            None,
+            format!(
+                "{TIER_LOOKUP_NEEDED} (cache rows for this tier mix dollar amounts and text-only entries)"
+            ),
         ),
         [] => (
             None,

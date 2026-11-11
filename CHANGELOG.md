@@ -10,6 +10,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - tests/tickets.rs (fake data, temp dirs). OI-33 lists deferred items.
 - `lottotool ticket void <id> --reason`: append-only void records (`ledger/tickets/tickets_voids.csv`); `list` marks VOID, `grade` excludes. `--cost` strict by decision.
 - `.github/workflows/crosscheck.yml`: weekly read-only official-source crosscheck (`--crosscheck 8`), mismatch fails the run (D-025; OI-20 open until first green dispatch on main).
+- Claude t48u follow-ups: 0-byte ledger files read as empty; duplicate ticket ids fail closed; EDT cutoff test; git guard via `rev-parse --show-toplevel` (subdirectory roots checked, warning outside a repo); accurate mixed-cache message; D-031 clock note; `tests/cli.rs` runs the binary (archived-date refusal, void exclusion/count, history-labeled baseline).
 - Claude t47u follow-ups: zero successful comparisons = FAIL; untracked-aware tree check; output in `$RUNNER_TEMP`; `tests/check_format.rs` pins the parsed line format. `ticket add` refuses archived draws; `LATE_ENTRY` / `LATE_VOID` flags; partial-last-line guard on both ledger files; `grade` white-match average vs chance baseline; synthetic README examples.
 
 ### Changed (2026-10-24 morning — t235u schedule facts + t236u coverage audit)

@@ -1349,3 +1349,43 @@ Your review is recorded verbatim above. All fixes are in commit [`8790f54`](http
 - **Free tickets:** noted under OI-33.
 - **Baseline:** `grade` prints average white matches per game next to k²/n (25/69 ≈ 0.362, 25/70 ≈ 0.357), labeled history, not prediction.
 - Tests: tickets 18, check_format 4; all fake data in temp dirs. No real tickets, picks or payout tables in the change.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 second review (relayed verbatim by Adam, t48u)
+
+Verdict: I approve the ledger core and the workflow. I’m not giving the full PR sign-off yet, because three pieces didn’t load for me (below).
+
+What I read at 5ccf188
+
+src/tickets.rs, tests/tickets.rs and crosscheck.yml. GitHub rate-limited my other fetches, so I haven’t seen main.rs, crosscheck.rs, check_format.rs, check.rs, eras.rs, eras.toml, or the two runs you linked (CI 43087004009, crosscheck 43087021899). I’m taking those results as reported.
+
+Fixes confirmed in code
+
+- Back-dated tickets: append refuses a draw already in the archive, with a test.
+- Late entry: a ticket created at or after 22:00 ET on the draw date is accepted but flagged LATE_ENTRY, and the tests pin the exact second. The cutoff uses chrono_tz New_York, so DST is handled.
+- Late voids: a void at or after the cutoff is flagged LATE_VOID, and the ticket is still graded and counted.
+- Append robustness: the newline check runs before every read and append, there is one write_all and then sync_all, and the partial-line test covers both files.
+- Git guard: git check-ignore runs before every write. A non-zero exit refuses, including a tracked ledger, so it fails closed.
+- Baseline: k²/n is tested at 0.362 and 0.357.
+- Workflow: check.txt goes to $RUNNER_TEMP, the tree check is git status --porcelain --untracked-files=all, and the zero-comparison FAIL is documented.
+
+Non-blocking findings
+
+- Empty ledger file. A 0-byte tickets.csv or tickets_voids.csv, for example from a crash after open and before the write, makes read_checked fail on the header. Treat an empty file as missing, as append_record already does, and add a test.
+- Duplicate ticket ids. Voids key off ticket_id, but read_ledger doesn’t reject duplicates. Add a fail-closed uniqueness check.
+- Summer cutoff. The tests only cover EST. One EDT case would pin the DST handling.
+- Guard scope. ensure_gitignored is skipped when root/.git doesn’t exist. That’s fine at the repo root, but it would be skipped silently if the tool were run from a subdirectory.
+- Clock. created_at comes from the local clock, so the append-only flags are discipline, not tamper-proofing. That’s fine, but say so in D-031.
+- Misleading message. In lookup_prize, a mix of rows with and without amounts reports “more than one amount”. It’s still safe, but the message is wrong.
+
+Gates before I sign off
+
+1. main.rs wiring.
+   - Confirm that ticket add passes the real archive draws for that game, loaded from data/. The test helper passes &[], so the back-dating refusal is dead code if the CLI does the same.
+   - Add a CLI-level test with an archived date.
+   - I also need to see that grade excludes voided tickets, counts them, and labels the baseline as history.
+2. crosscheck.rs and check_format.rs. I need to see how “zero successful comparisons per game” is computed, and how the test runs the workflow’s case block.
+3. Runs. Link me the two runs again once fetching works, or paste their summaries.
+
+Merge path
+
+Keep OI-20 open. After the merge, dispatch crosscheck on main. Once it’s green, close OI-20 and only then grade real tickets, as you wrote. The deferred two-week all-WARN alert in OI-33 is accepted.

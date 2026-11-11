@@ -5,9 +5,9 @@ use lottotool::Game;
 use lottotool::data::{Draw, PayoutRow};
 use lottotool::eras::{ErasFile, GameDef};
 use lottotool::tickets::{
-    GradeStatus, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, TicketRow, VOIDS_HEADER, VoidRow,
-    append as append_with, chance_white_baseline, grade as grade_with, is_late_void, ledger_path,
-    lookup_prize, read_ledger, read_voids, validate, void, voids_path,
+    GradeStatus, Guard, NewTicket, TICKETS_HEADER, TIER_LOOKUP_NEEDED, TicketRow, VOIDS_HEADER,
+    VoidRow, append as append_with, chance_white_baseline, grade as grade_with, guard_status,
+    is_late_void, ledger_path, lookup_prize, read_ledger, read_voids, validate, void, voids_path,
 };
 use std::path::{Path, PathBuf};
 
@@ -571,4 +571,146 @@ fn hand_edited_void_log_fails_closed() {
             .contains("more than once")
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+// ------------------------------------------------------------------ round 2 (Claude t48u)
+
+#[test]
+fn zero_byte_ledger_files_are_treated_as_missing() {
+    let root = tmp_root("empty");
+    std::fs::create_dir_all(ledger_path(&root).parent().unwrap()).unwrap();
+    std::fs::write(ledger_path(&root), b"").unwrap();
+    std::fs::write(voids_path(&root), b"").unwrap();
+    assert!(read_ledger(&root).unwrap().is_empty());
+    assert!(read_voids(&root).unwrap().is_empty());
+    let g = game("powerball");
+    let t = append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    assert_eq!(t.ticket_id, "T0001");
+    assert!(
+        std::fs::read_to_string(ledger_path(&root))
+            .unwrap()
+            .starts_with(TICKETS_HEADER)
+    );
+    void(&root, "T0001", "fake", before_draw()).unwrap();
+    assert!(
+        std::fs::read_to_string(voids_path(&root))
+            .unwrap()
+            .starts_with(VOIDS_HEADER)
+    );
+    assert_eq!(read_voids(&root).unwrap().len(), 1);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn duplicate_ticket_ids_fail_closed() {
+    let root = tmp_root("dupid");
+    let g = game("powerball");
+    append(&root, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    let text = std::fs::read_to_string(ledger_path(&root)).unwrap();
+    let row = text.lines().nth(1).unwrap().to_string();
+    let doubled = format!("{text}{row}\n");
+    std::fs::write(ledger_path(&root), &doubled).unwrap();
+    let e = read_ledger(&root).unwrap_err();
+    assert!(e.to_string().contains("duplicate ticket_id T0001"), "{e}");
+    assert!(append(&root, &g, &pb(&[1, 2, 3, 4, 6], 6, false), before_draw()).is_err());
+    assert!(void(&root, "T0001", "x", before_draw()).is_err());
+    assert_eq!(
+        std::fs::read_to_string(ledger_path(&root)).unwrap(),
+        doubled
+    );
+    assert!(!voids_path(&root).exists());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn late_entry_cutoff_in_edt_summer() {
+    // 2030-07-03 is a Wednesday (PB). 22:00 EDT (UTC-4) = 2030-07-04 02:00Z.
+    let g = game("powerball");
+    let root = tmp_root("edt");
+    let mut t = pb(&[1, 2, 3, 4, 5], 6, false);
+    t.draw_date = d("2030-07-03");
+    let at = Utc.with_ymd_and_hms(2030, 7, 4, 2, 0, 0).unwrap();
+    let late = append(&root, &g, &t, at).unwrap();
+    assert!(grade(&g, &late, &[], &[]).unwrap().late_entry);
+    let mut t2 = t.clone();
+    t2.whites = vec![1, 2, 3, 4, 6];
+    // 01:59:59Z = 21:59:59 EDT: on time (an EST reading would put the cutoff at 03:00Z).
+    let ok = append(
+        &root,
+        &g,
+        &t2,
+        Utc.with_ymd_and_hms(2030, 7, 4, 1, 59, 59).unwrap(),
+    )
+    .unwrap();
+    assert!(!grade(&g, &ok, &[], &[]).unwrap().late_entry);
+    // 02:30Z would be on time under EST; under EDT it is late.
+    let mut t3 = t.clone();
+    t3.whites = vec![1, 2, 3, 4, 7];
+    let mid = append(
+        &root,
+        &g,
+        &t3,
+        Utc.with_ymd_and_hms(2030, 7, 4, 2, 30, 0).unwrap(),
+    )
+    .unwrap();
+    assert!(grade(&g, &mid, &[], &[]).unwrap().late_entry);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn git_guard_checks_from_a_subdirectory_root() {
+    if std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let top = tmp_root("guard-sub");
+    assert!(
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&top)
+            .status()
+            .unwrap()
+            .success()
+    );
+    std::fs::write(top.join(".gitignore"), "/ledger/\n").unwrap();
+    let sub = top.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    let g = game("powerball");
+    // --root = sub: no sub/.git, but the work tree is found and sub/ledger/ is NOT ignored.
+    let e = append(&sub, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap_err();
+    assert!(e.to_string().contains("not gitignored"), "{e}");
+    assert!(!ledger_path(&sub).exists());
+    assert!(matches!(
+        guard_status(&sub, &ledger_path(&sub)).unwrap(),
+        Guard::NotIgnored(_)
+    ));
+    // Repo root works; outside any repo the status is NotInRepo (warned, not silent).
+    append(&top, &g, &pb(&[1, 2, 3, 4, 5], 6, false), before_draw()).unwrap();
+    assert_eq!(
+        guard_status(&top, &ledger_path(&top)).unwrap(),
+        Guard::Ignored
+    );
+    let outside = tmp_root("guard-outside");
+    assert_eq!(
+        guard_status(&outside, &ledger_path(&outside)).unwrap(),
+        Guard::NotInRepo
+    );
+    let _ = std::fs::remove_dir_all(&top);
+    let _ = std::fs::remove_dir_all(&outside);
+}
+
+#[test]
+fn mixed_amount_and_text_rows_get_accurate_message() {
+    let cache = vec![
+        fake_cache("base", 4, false, Some(100)),
+        fake_cache("base", 4, false, None),
+    ];
+    let (usd, txt) = lookup_prize(&cache, Game::Powerball, 4, false, false);
+    assert!(usd.is_none());
+    assert!(txt.starts_with(TIER_LOOKUP_NEEDED));
+    assert!(txt.contains("mix dollar amounts and text-only"), "{txt}");
+    assert!(!txt.contains("more than one amount"));
 }

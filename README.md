@@ -63,6 +63,10 @@ lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
 * The ledger is `ledger/tickets/tickets.csv` under the **gitignored `ledger/`**. Rows are only
   appended (never rewritten); `created_at` is UTC. `ticket add` refuses to write if the ledger
   path is not gitignored, and fails closed on an unexpected header.
+* The git guard locates the work tree with `git rev-parse --show-toplevel` and refuses to write
+  unless `git check-ignore` confirms the ledger path is ignored. Outside a git work tree it
+  prints a warning. Duplicate ticket ids fail closed; a 0-byte file reads as empty.
+* Timestamps come from the local clock: the ledger is a discipline record, not tamper-proof (D-031).
 * Each append is one `write_all` of the whole row followed by an fsync. Before any read or
   append, the tool checks the file ends in a newline; a partial last line (e.g. after a crash)
   is refused, never glued onto. This applies to both ledger files.

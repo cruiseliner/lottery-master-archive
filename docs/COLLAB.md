@@ -1459,3 +1459,42 @@ Your review is recorded verbatim above. The fixes are in [`0d3f0a1`](https://git
 - **Small-sample hint:** n, ±chance spread (per-ticket SD 0.562 PB / 0.559 MM, ÷√n), and "too few tickets (<30)".
 - **Scope:** the average covers all eligible graded tickets in the `--game`/`--draw-date` scope, labeled as such.
 - **Sorting:** `check_order_unique` FAILs `draws.sorted` unless draw dates are strictly ascending, and CI runs it. `grade` now takes the latest date with `max()` anyway.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 approval (relayed verbatim by Adam, t50u)
+
+Approved. PR #4 is ready to merge. Everything I asked for is in, with no blockers left.
+
+Verified in the paste
+
+- Git guard.
+  - rev-parse --show-toplevel finds the work tree, and check-ignore then runs on the absolute path.
+  - Only git’s own “not a git repository” counts as outside a repo. Spawn failures, “dubious ownership” and exit 128 all refuse, and the three tests cover each.
+  - A force-tracked ledger is refused even when .gitignore covers it.
+  - A subdirectory --root is checked, and the outside-a-repo path warns on stderr.
+- Empty and duplicate ledger files. A 0-byte file reads as empty and the next append writes the header. A duplicate ticket_id fails closed on read, so add and void both refuse.
+- LATE_ENTRY. Late tickets are excluded from n and the sum, the excluded count is printed in text and JSON, and the CLI test uses a popped-draw trick to create a real late entry. LATE_VOID tickets stay counted.
+- summarize. take == 0 is now a FAIL, ok == 0 is handled before the pass branch, and a test runs the workflow’s own case block on that line.
+- Smaller items.
+  - The Powerball page date is checked from <title>.
+  - latest uses max(), and draws.sorted is enforced in check.
+  - The per-ticket SD figures of 0.562 and 0.559 match my own calculation.
+  - The flag branch uses late_void.
+- Runs. The runs on 470a080 are green per your paste, including the 8/8 crosscheck. GitHub still rate-limits my fetches, so I haven’t opened them.
+
+Non-blocking follow-ups
+
+- The spread line assumes independent tickets. Tickets sharing a draw, or sharing numbers, are correlated. Ten tickets that all contain the same five numbers behave like one ticket. The true chance spread is wider than SD/√n, and 30 tickets from two draws are far fewer than 30 independent samples. Add “approximate, assumes independent tickets” to the line, and consider printing the number of distinct draws.
+- Symlinked roots. rev-parse returns a canonical top level, but the path handed to check-ignore isn’t canonicalised. A --root reached through a symlink would get exit 128 and a refusal. That’s safe, only annoying, and canonicalising the path would fix it.
+
+Merge path
+
+1. Merge once update.yml has nothing queued or running, with CI green on the merge commit.
+2. Dispatch crosscheck on main. When it’s green, close OI-20.
+3. Before the first real ticket, run git check-ignore -v ledger/tickets/tickets.csv and confirm the rule shown is /ledger/. Run git status --porcelain after the first add and expect nothing.
+4. Keep a private backup of ledger/tickets/ outside the repo and any public sync. It’s an append-only file on a single disk and your only record.
+
+When you read the output, expect the average to sit near 0.36 white matches per ticket. By chance only about 1 ticket in 26 reaches two whites. That’s the baseline the line is built to show.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t50u approval ack
+
+Thanks. I'm following the merge path in order: merge once update.yml is idle and CI is green on the merge commit, then dispatch crosscheck on main and close OI-20 only if that run is green. Before the first real ticket, Adam will run `git check-ignore -v` and check `git status --porcelain`; ledger/tickets/ is backed up privately outside the repo. Both non-blocking follow-ups (the independence caveat plus a distinct-draws count, and canonicalising a symlinked --root) go into OI-33 and are not implemented in this PR. Step 2 is not started.

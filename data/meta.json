@@ -2,13 +2,13 @@
   "games": {
     "megamillions": {
       "current_era": "mm-2025",
-      "draws_csv_sha256": "44219bbb14a7e98904336988e6b9dba85619519287269ed34804a22be97247ef",
+      "draws_csv_sha256": "18db8c2b3cc0b7f62ce21ace0fe733cf7dd6471a4699ae24690300411d368cab",
       "first_draw": "2002-05-17",
-      "last_draw": "2026-11-06",
-      "missing_csv_sha256": "7100c9ebc7d478f0064502f7bd1993a9591a956562dfbe7fe70ff28f06414f8d",
+      "last_draw": "2026-11-10",
+      "missing_csv_sha256": "7691afa6bae3368183dc57ba45108e88cf8ae24931879c00da85105831a79148",
       "ny_dataset": "5xaw-6ayf",
       "ny_dataset_url": "https://data.ny.gov/resource/5xaw-6ayf.json",
-      "rows": 2555
+      "rows": 2556
     },
     "powerball": {
       "current_era": "pb-2015",
@@ -21,8 +21,8 @@
       "rows": 2023
     }
   },
-  "ingest_log_csv_sha256": "a36c983cb17b11976f8392cdb5b02877e9ede86465073d598ba223ccd038d43c",
+  "ingest_log_csv_sha256": "4b5c883acae94db6b687803070953e8e0bdf47b5e9d381b36ecbaeca935d4d2c",
   "schema_version": 2,
   "tool_version": "0.1.0",
-  "updated_at": "2026-11-10T18:40:18Z"
+  "updated_at": "2026-11-11T18:41:28Z"
 }

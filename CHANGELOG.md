@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Added (2026-11-11 — v0.2 Step 1, D-031)
+- `lottotool ticket add|list` and `lottotool grade`: private append-only ticket ledger (`ledger/tickets/tickets.csv`, gitignored) checked against the archive; tiers from the encoded current charts, amounts only from the private payout cache, else `TIER_LOOKUP_NEEDED`; pending draws reported as `PENDING`.
+- `eras.toml`: optional `power_play_price_usd` (pb-2015 = 1); `pb` / `mm` CLI aliases.
+- tests/tickets.rs (fake data, temp dirs). OI-33 lists deferred items.
+- `lottotool ticket void <id> --reason`: append-only void records (`ledger/tickets/tickets_voids.csv`); `list` marks VOID, `grade` excludes. `--cost` strict by decision.
+- `.github/workflows/crosscheck.yml`: weekly read-only official-source crosscheck (`--crosscheck 8`), mismatch fails the run (D-025; OI-20 open until first green dispatch on main).
+- Claude t49u follow-ups: LATE_ENTRY excluded from the white-match measurement (count printed; CLI test); measurement over all eligible tickets in scope with n, ±chance spread and a <30 note; crosscheck `summarize` FAILs on take = 0; Powerball page date verified; grade flag branches on `late_void`; latest draw by max date; git guard refuses any git failure other than "not a git repository" (tests: missing git, failing git, tracked ledger, outside a work tree warns and proceeds).
+- Claude t48u follow-ups: 0-byte ledger files read as empty; duplicate ticket ids fail closed; EDT cutoff test; git guard via `rev-parse --show-toplevel` (subdirectory roots checked, warning outside a repo); accurate mixed-cache message; D-031 clock note; `tests/cli.rs` runs the binary (archived-date refusal, void exclusion/count, history-labeled baseline).
+- Claude t47u follow-ups: zero successful comparisons = FAIL; untracked-aware tree check; output in `$RUNNER_TEMP`; `tests/check_format.rs` pins the parsed line format. `ticket add` refuses archived draws; `LATE_ENTRY` / `LATE_VOID` flags; partial-last-line guard on both ledger files; `grade` white-match average vs chance baseline; synthetic README examples.
+
 ### Changed (2026-10-24 morning — t235u schedule facts + t236u coverage audit)
 - COLLAB: t236u brief pasted verbatim into FROM CLAUDE; t235u body missing from handoff (noted, not invented). FOR CLAUDE: 655e6cc push proxy time, Phase 1 single-cron schedule form, event=schedule=0; coverage audit summary + file links.
 - docs: `COVERAGE_AUDIT.md` — archive vs NY feeds (scratch), range/schedule checks; only gap MM 2026-10-23 missing_from_archive.

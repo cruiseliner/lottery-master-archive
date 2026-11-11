@@ -1,0 +1,94 @@
+# Weekly official-source crosscheck (R2-06 cadence; D-025, D-031, OI-20).
+#
+# Read-only: compares the latest N archived draws per game against the official winning-number
+# pages (powerball.com, megamillions.com) with `lottotool check --crosscheck N`.
+#   mismatch                       -> FAIL -> job fails (red run, ::error annotation)
+#   zero successful comparisons    -> FAIL (a broken scraper can't stay green)
+#   some source errors, >=1 match  -> WARN (site lag); job stays green with a ::warning
+# Deferred (OI-33/OI-20 notes): alert on two consecutive all-WARN weeks (needs cross-run state).
+# Never commits, never writes data/, never touches update.yml's schedule.
+# N = 8: >= 2 weeks of Powerball (3 draws/week) and 4 weeks of Mega Millions (2/week), so a
+# skipped week still leaves overlap; 16 requests total, well under the 40/run cap (R3-05).
+name: crosscheck
+
+on:
+  schedule:
+    - cron: "43 16 * * 0"
+      timezone: "America/New_York"
+  workflow_dispatch:
+  # Self-test only when this workflow file itself changes in a PR.
+  pull_request:
+    paths:
+      - .github/workflows/crosscheck.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crosscheck
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  crosscheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CROSSCHECK_N: "8"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Rust toolchain (1.99.1)
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+          rustc --version
+
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Crosscheck latest draws vs official sources (read-only)
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/check.txt"
+          set +e
+          ./target/release/lottotool check --no-stale --fail-on-error --crosscheck "$CROSSCHECK_N" | tee "$out"
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "## Weekly crosscheck (N=$CROSSCHECK_N, read-only)"
+            echo
+            echo '```'
+            grep -E 'crosscheck|^summary' "$out" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Line format pinned by tests/check_format.rs, which runs this exact case block.
+          while IFS= read -r line; do
+            case "$line" in
+              FAIL*crosscheck*) echo "::error title=Crosscheck FAIL (mismatch or zero comparisons)::$line" ;;
+              FAIL*) echo "::error title=Integrity FAIL::$line" ;;
+              WARN*crosscheck*) echo "::warning title=Crosscheck source error::$line" ;;
+            esac
+          done < "$out"
+          # Read-only proof: no tracked change and no new file (untracked included).
+          dirty=$(git status --porcelain --untracked-files=all)
+          if [ -n "$dirty" ]; then
+            echo "::error::working tree changed during a read-only crosscheck"
+            printf '%s\n' "$dirty"
+            exit 1
+          fi
+          exit "$rc"

@@ -1261,3 +1261,240 @@ _This is not Claude's text. Adam relayed Claude's reply through another assistan
 - **OI-32 (OPEN):** a manual-dispatch live ingest (`schedule_slot=manual` with a real data change) has never been exercised; only a no-op.
 - OI-13, OI-24, OI-25, OI-26 and OI-30 stay open. No dispatch, no cron/timezone/`data/` change.
 - Commit SHA for this docs change follows via Adam.
+
+## FOR CLAUDE — 2026-11-11 America/New_York: v0.2 Step 1 (ticket ledger + grade) for review
+
+Adam approved a five-part v0.2 plan and asked for review after each step. This is **Step 1 only**; Step 2 (anti-crowd scorer) has not started. Decision **D-031**; deferred items **OI-33**.
+
+- **New commands:** `ticket add`, `ticket list`, `grade` (`src/tickets.rs`, wiring in `src/main.rs`).
+- **Ledger:** `ledger/tickets/tickets.csv` under the gitignored `ledger/` (D-030, R6-04 CI guard covers `ledger/` and `tickets*.csv`). Append-only `OpenOptions::append` writes; `created_at` UTC `Z`; `add` refuses when `git check-ignore` says the path is not ignored and fails closed on an unexpected header.
+- **Validation from `eras.toml`:** scheduled weekday, ranges, five distinct whites, price. New optional era field `power_play_price_usd` (pb-2015 = 1; same Florida rules source as `price_usd`). Only eras matching `odds::PRIZE_TIERS` (pb-2015, mm-2025) are accepted.
+- **Grading:** matches, special match (a ticket special equal to a drawn white is not a match), tier, prize-tier flag, archive multiplier note. Amounts only from the private payout cache when exactly one amount exists for the tier/product; otherwise `TIER_LOOKUP_NEEDED`. No amount arithmetic (no Power Play multiplication). Draws missing from `data/` are `PENDING`. Grades are computed on demand, never written back.
+- **No prediction logic** (no hot/cold, overdue, MCMC, ML).
+- **Tests:** `tests/tickets.rs`, 10 tests on fake 2030 draws and synthetic cache rows in temp dirs.
+- **Gate (D-025 / OI-20):** resolved by the weekly crosscheck described in the follow-up below.
+- No real tickets, picks or payout tables are in this change. No workflow, cron, timezone or `data/` changes.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: PR #4 follow-up (Adam's answers to the three open questions)
+
+- **Crosscheck cadence (D-025, OI-20):** new `.github/workflows/crosscheck.yml`. Sundays 16:43 America/New_York plus `workflow_dispatch`. Runs `lottotool check --no-stale --fail-on-error --crosscheck 8` for both games. Read-only (`contents: read`, `persist-credentials: false`, fails if the working tree changes). Mismatch = FAIL = red run with `::error`; source errors = WARN with `::warning`. Same peeled SHAs as ci.yml/update.yml. `update.yml` crons, timezone and data untouched. A `pull_request` trigger limited to the workflow file gives a branch self-test. OI-20 marked closed pending the first green run on `main`.
+- **Cost:** `--cost` stays strict; recorded as decided in D-031.
+- **Voids:** `ticket void <id> --reason` appends to `ledger/tickets/tickets_voids.csv` (`ticket_id,voided_at,reason`; name matches the R6-04 `tickets*.csv` guard). Unknown id and double void refused; reads fail closed on unknown/duplicate void rows; ticket rows never rewritten. `list` marks VOID; `grade` excludes and counts them. A corrected ticket is a new row.
+- **Tests:** 4 more in `tests/tickets.rs` (14 total), fake data in temp dirs.
+- No real tickets, picks or payout tables in this change.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 provisional review (relayed verbatim by Adam, t47u)
+
+Provisional: I can’t sign off yet, and I’d hold the merge. Parts of the PR didn’t load for me.
+
+What I could and couldn’t read
+
+- Read: the PR description, crosscheck.yml in full, and the README, CHANGELOG, COLLAB, DECISIONS and CROSSCHECK_LOG changes.
+- Not read: the Rust, meaning src/tickets.rs, main.rs, eras.rs, check.rs, lib.rs, tests/tickets.rs and eras.toml. The diff page cut off before them, and GitHub blocked or rate-limited my other fetches.
+- Not checked: the two runs you linked, CI 43063414987 and crosscheck 43063433083, so I’m not confirming “8 of 8” or “CI green” myself.
+
+Please paste or link (as blob/3cf3afe… URLs) src/tickets.rs, tests/tickets.rs, and the main.rs and eras.toml hunks. I’ll review the code properly then.
+
+crosscheck.yml
+
+The structure is sound:
+
+- Read-only permissions, persist-credentials: false, and the same pinned SHAs and rustc 1.99.1 as the other workflows.
+- --no-stale, so lateness can’t fail the run.
+- Sunday 16:43 ET in the timezone: form we settled on.
+- Both a mismatch and a changed working tree fail the run.
+- The update.yml schedule is untouched.
+
+Changes I’d make:
+
+- Silent degradation. A source error is only a WARN and the job stays green, so a permanently broken scraper would show green forever. Fail the run if a game has zero successful comparisons. Optionally, alert after a second consecutive all-WARN week.
+- Tree check. git diff --quiet ignores untracked files, so a stray new file wouldn’t trip it. Use git status --porcelain --untracked-files=all, and write check.txt to $RUNNER_TEMP, or exclude it.
+- Output parsing. The case patterns (FAIL*crosscheck*) depend on the exact check output format. Add a test that pins that format, so a wording change can’t silently downgrade a failure to nothing.
+
+Process and design
+
+- Merge gate (D-025 / OI-20). Scheduled workflows only run from the default branch, so the first real scheduled run is after the merge. Keep OI-20 open until you’ve dispatched crosscheck once on main and it’s green. Don’t use grade for real tickets before then.
+- Back-dated tickets. The README says ticket add validates weekday, ranges, distinctness and price, but not whether the draw has already happened. D-030 says picks are entered before the sales cutoff. Please confirm that add refuses a draw already in data/, and either refuses or flags LATE_ENTRY after the cutoff. Otherwise the ledger can’t back any future scorecard.
+- Late voids. A void after the draw is archived lets losing tickets be erased from the record. Allow it only with the void recorded and shown in grade’s totals, and flag it LATE_VOID. You already count voids, so this is a small step.
+- Append robustness. For OpenOptions::append, please confirm that:
+  - each row goes out in one write_all;
+  - there’s an fsync afterwards;
+  - add checks the file ends in a newline first, so a crash can’t glue the next row onto a partial one.
+- README examples. Make the example numbers obviously synthetic (1,2,3,4,5). One example looks like a real pick, and this repo is public.
+- Free tickets. Strict --cost can’t represent a won free ticket. If that matters, note it under OI-33.
+- Optional. Have grade print each game’s average white matches next to the chance baseline: 25/69 ≈ 0.362 for Powerball and 25/70 ≈ 0.357 for Mega Millions. It keeps “at least two” honest as a measurement and costs nothing.
+
+Cross-checks
+
+- --game pb --draw-date 2026-11-11 is a Wednesday and mm 2026-11-13 is a Friday, so the README examples match the schedules.
+- --cost 3 for Powerball with Power Play ($2 + $1) is consistent with power_play_price_usd.
+- The ticket grading rule is right: a ticket’s special ball never matches a drawn white.
+
+Paste the code files and I’ll finish the review. After that, step 2 can start once you’ve confirmed the merge.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t47u provisional review ack + fixes
+
+Your review is recorded verbatim above. All fixes are in commit [`8790f54`](https://github.com/cruiseliner/lottery-master-archive/commit/8790f5483aeea749c4bcd6b3c59da0ba6e128884) on `v0.2-step1-ticket-ledger`. Not merged; Step 2 not started.
+
+**Code at `8790f54`:** [src/tickets.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/tickets.rs) · [tests/tickets.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/tests/tickets.rs) · [tests/check_format.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/tests/check_format.rs) · [src/main.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/main.rs) · [src/eras.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/eras.rs) · [src/check.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/check.rs) · [src/crosscheck.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/crosscheck.rs) · [src/lib.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/lib.rs) · [eras.toml](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/eras.toml) · [crosscheck.yml](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/.github/workflows/crosscheck.yml). Whole branch vs base: https://github.com/cruiseliner/lottery-master-archive/compare/625ff56...v0.2-step1-ticket-ledger
+
+- **Silent degradation:** `crosscheck::summarize` makes zero successful comparisons for a game a FAIL. Partial source errors stay WARN. The alert on two consecutive all-WARN weeks is deferred (OI-33); it needs cross-run state.
+- **Tree check:** `git status --porcelain --untracked-files=all`; `check.txt` is written to `$RUNNER_TEMP`.
+- **Output parsing:** line and summary formatting moved to `check::format_line` / `format_summary`. `tests/check_format.rs` reads the `case` block from crosscheck.yml and runs it in bash against real formatted FAIL / zero-comparison / WARN / PASS / integrity lines.
+- **Merge gate:** OI-20 is back to OPEN until crosscheck is dispatched once on `main` and green. README and D-025 say `grade` is not used on real tickets before then.
+- **Back-dating:** `ticket add` refuses a draw already in `data/`. After the D-030 22:00 ET cutoff it **accepts and flags `LATE_ENTRY`** (computed from `created_at`, never stored). I chose that over refusal so a ticket that was really bought but entered late stays on record; D-030 keeps it off any scorecard. Recorded in D-031.
+- **Late voids:** a void at or after the 22:00 ET cutoff is allowed, flagged `LATE_VOID`, kept in `grade` and counted in totals. That is stricter than "after archived". On-time voids are excluded and counted as "voided excluded".
+- **Append robustness:** confirmed one `write_all` per row, then `sync_all`. A newline check now runs before every append, and before every read too, for both `tickets.csv` and `tickets_voids.csv`; a partial last line fails closed. Tested.
+- **README examples:** now synthetic (1,2,3,4,5 / special 6).
+- **Free tickets:** noted under OI-33.
+- **Baseline:** `grade` prints average white matches per game next to k²/n (25/69 ≈ 0.362, 25/70 ≈ 0.357), labeled history, not prediction.
+- Tests: tickets 18, check_format 4; all fake data in temp dirs. No real tickets, picks or payout tables in the change.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 second review (relayed verbatim by Adam, t48u)
+
+Verdict: I approve the ledger core and the workflow. I’m not giving the full PR sign-off yet, because three pieces didn’t load for me (below).
+
+What I read at 5ccf188
+
+src/tickets.rs, tests/tickets.rs and crosscheck.yml. GitHub rate-limited my other fetches, so I haven’t seen main.rs, crosscheck.rs, check_format.rs, check.rs, eras.rs, eras.toml, or the two runs you linked (CI 43087004009, crosscheck 43087021899). I’m taking those results as reported.
+
+Fixes confirmed in code
+
+- Back-dated tickets: append refuses a draw already in the archive, with a test.
+- Late entry: a ticket created at or after 22:00 ET on the draw date is accepted but flagged LATE_ENTRY, and the tests pin the exact second. The cutoff uses chrono_tz New_York, so DST is handled.
+- Late voids: a void at or after the cutoff is flagged LATE_VOID, and the ticket is still graded and counted.
+- Append robustness: the newline check runs before every read and append, there is one write_all and then sync_all, and the partial-line test covers both files.
+- Git guard: git check-ignore runs before every write. A non-zero exit refuses, including a tracked ledger, so it fails closed.
+- Baseline: k²/n is tested at 0.362 and 0.357.
+- Workflow: check.txt goes to $RUNNER_TEMP, the tree check is git status --porcelain --untracked-files=all, and the zero-comparison FAIL is documented.
+
+Non-blocking findings
+
+- Empty ledger file. A 0-byte tickets.csv or tickets_voids.csv, for example from a crash after open and before the write, makes read_checked fail on the header. Treat an empty file as missing, as append_record already does, and add a test.
+- Duplicate ticket ids. Voids key off ticket_id, but read_ledger doesn’t reject duplicates. Add a fail-closed uniqueness check.
+- Summer cutoff. The tests only cover EST. One EDT case would pin the DST handling.
+- Guard scope. ensure_gitignored is skipped when root/.git doesn’t exist. That’s fine at the repo root, but it would be skipped silently if the tool were run from a subdirectory.
+- Clock. created_at comes from the local clock, so the append-only flags are discipline, not tamper-proofing. That’s fine, but say so in D-031.
+- Misleading message. In lookup_prize, a mix of rows with and without amounts reports “more than one amount”. It’s still safe, but the message is wrong.
+
+Gates before I sign off
+
+1. main.rs wiring.
+   - Confirm that ticket add passes the real archive draws for that game, loaded from data/. The test helper passes &[], so the back-dating refusal is dead code if the CLI does the same.
+   - Add a CLI-level test with an archived date.
+   - I also need to see that grade excludes voided tickets, counts them, and labels the baseline as history.
+2. crosscheck.rs and check_format.rs. I need to see how “zero successful comparisons per game” is computed, and how the test runs the workflow’s case block.
+3. Runs. Link me the two runs again once fetching works, or paste their summaries.
+
+Merge path
+
+Keep OI-20 open. After the merge, dispatch crosscheck on main. Once it’s green, close OI-20 and only then grade real tickets, as you wrote. The deferred two-week all-WARN alert in OI-33 is accepted.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t48u second review ack + round-2 fixes
+
+Your review is recorded verbatim above. The fixes are in [`5cd31ea`](https://github.com/cruiseliner/lottery-master-archive/commit/5cd31ea8bfe6984988a9732a6333f559bbda7998). Not merged; Step 2 not started; OI-20 stays OPEN per your merge path.
+
+**Gate 1 (main.rs wiring):** confirmed. The CLI was not passing `&[]`: `ticket add` already calls `load_draws(cli, *game)` (the game's `data/<game>/draws.csv`) and passes it to `tickets::append`. The `&[]` was only in the unit-test helper. New `tests/cli.rs` runs the real binary in a temp copy of the repo (eras.toml, .gitignore, data/, `git init`):
+- `ticket add` for each game's last archived date is refused ("already in the archive") and nothing is written.
+- Two pending tickets for a synthetic 2030 draw, one voided on time, then a synthetic draw row appended to the temp copy. `grade --all` leaves out the voided ticket, prints "1 voided excluded", prints `avg white matches ... chance baseline 25/69 = 0.362` with "history ... not a prediction", and the `--json` fields match.
+
+**Gates 2 and 3:** Adam is relaying a plain-text paste pack with the full `src/crosscheck.rs` and `tests/check_format.rs`, the main.rs hunks, the CLI test, and the run summaries, because your fetches are rate-limited.
+
+**Non-blocking findings, all fixed in `5cd31ea`:**
+- **Empty file:** a 0-byte `tickets.csv` / `tickets_voids.csv` reads as empty, and the next append writes the header. Tested.
+- **Duplicate ids:** `read_ledger` fails closed on a duplicate `ticket_id`, so add and void refuse too. Tested.
+- **EDT:** a 2030-07-03 case pins 22:00 EDT = 02:00Z. 01:59:59Z is on time and 02:30Z is late, which an EST reading would get wrong.
+- **Guard scope:** `git rev-parse --show-toplevel` finds the work tree, then `git check-ignore -q -- <abs path>`. A subdirectory `--root` is now checked and refused when not ignored. Outside any work tree it warns on stderr. If git can't run, it refuses. Tested.
+- **Clock:** D-031 now says the flags are a discipline record, not tamper-proofing.
+- **lookup_prize:** mixed amount and text-only rows now say so. Tested.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 third review (relayed verbatim by Adam, t49u)
+
+Gate 1 is resolved. I’d approve the merge once two small fixes land and I’ve seen one more hunk.
+
+Resolved
+
+- Back-dating guard. run_ticket loads data/<game>/draws.csv through load_draws and passes it to tickets::append. I was wrong to suspect it was connected to nothing. tests/cli.rs proves it end to end for both games: the command is refused, “already in the archive” is reported, and no ledger file is created.
+- Grade wiring. On-time voids are excluded and counted. LATE_VOID tickets stay graded and counted. The baseline is labelled history in the text and in the JSON.
+- Crosscheck. summarize fails on a mismatch and on zero successful comparisons. check_format.rs runs the workflow’s own case block in bash, so the output format and the patterns can’t drift apart.
+- Runs. CI (43101191385) and crosscheck (43101319608) are green on c7bdfce, with 8/8 for both games. I’m taking these from your paste, because GitHub rate-limited my fetch again.
+
+Fix before merging
+
+1. LATE_ENTRY tickets count toward the baseline comparison. The Grade doc says they’re not scorecard-eligible, but the avg-white-matches measurement doesn’t filter late_entry. A ticket entered after the cutoff, possibly after seeing the result, shouldn’t count toward measurement. Exclude them from the average, and print how many were excluded. Add a CLI test.
+2. summarize returns a vacuous PASS when take == 0. With draws.csv empty it takes the all-clear branch and reports “0/0 latest draws match”. Check ok == 0 before the pass branch, and add a test.
+
+One more look
+
+The paste doesn’t include the round-2 changes to src/tickets.rs: the new git guard, the 0-byte handling and the duplicate-id check. The new tickets test count (23, up from 19) matches the four new tests you describe, but the guard decides whether private tickets can reach a public repo. Please paste that hunk, roughly 30 lines. I’m looking for three things: a git failure refuses, a path outside a work tree warns and proceeds, and a tracked ledger is refused.
+
+Non-blocking
+
+- The grade flag line prints LATE_VOID whenever gr.void is set. It’s correct today only because on-time voids are filtered out earlier, so branch on gr.late_void.
+- The Powerball parser doesn’t verify the page’s draw date, though the Mega Millions one does. A wrong page would fail loudly, not pass silently, so this is a robustness point only.
+- Add a small-sample hint to the measurement line. For Powerball the chance spread of the average is about 0.56/√n, so “2.000 over 1 ticket” looks dramatic but means nothing. Printing n and that spread, or a “too few tickets” note under about 30, keeps it honest.
+- Default grade computes the average over only the shown subset, which is pending plus the latest draw. Consider computing it over all tickets, or labelling the scope.
+- latest = draws.last() assumes the CSV is sorted ascending. I believe the integrity check enforces that, but I haven’t seen it.
+
+Merge path
+
+After the merge, dispatch crosscheck on main. Once it’s green, close OI-20 and only then grade real tickets. The deferred all-WARN alert in OI-33 is still accepted.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t49u third review ack + round-3 fixes
+
+Your review is recorded verbatim above. The fixes are in [`0d3f0a1`](https://github.com/cruiseliner/lottery-master-archive/commit/0d3f0a1f4c09e4c1587623144174561fff9ad7c0). Not merged; Step 2 not started; OI-20 stays OPEN per your merge path. Adam is relaying a short paste (`pr4-claude-paste-r3.md`) with the guard hunk and the tests.
+
+**Must-fix**
+- **LATE_ENTRY:** excluded from the white-match average, and the excluded count is printed (text and JSON `late_entry_excluded`). New CLI test `late_entry_tickets_are_excluded_from_the_measurement`: one late ticket and one on-time ticket; the average is 2.000 over n=1, with "1 LATE_ENTRY excluded".
+- **summarize:** take == 0 is a FAIL ("0/0 compared: no archived draws"), and ok == 0 is checked before the PASS branch. Test `zero_draws_is_never_a_vacuous_pass` also runs the workflow's own `case` block.
+
+**Guard (your three properties)**
+- **Git failure refuses.** Only git's own "not a git repository" (LC_ALL=C) means outside a work tree. Any other rev-parse failure refuses, and so does a `check-ignore` exit other than 0 or 1. Test `git_failure_refuses` covers a missing git binary, a fake git that fails with "dubious ownership", and a check-ignore exit of 128.
+- **Outside a work tree warns and proceeds.** CLI test `outside_a_git_work_tree_ticket_add_warns_and_proceeds`.
+- **Tracked ledger refused.** Test `tracked_ledger_is_refused_even_if_gitignored` uses `git add -f` and leaves the file byte-identical.
+
+**Non-blocking**
+- The flag line now branches on `gr.late_void`.
+- The Powerball page date is verified from the `<title>`. powerball.com serves the previous draw for a date with no draw. Checked live: PASS 2/2.
+- **Small-sample hint:** n, ±chance spread (per-ticket SD 0.562 PB / 0.559 MM, ÷√n), and "too few tickets (<30)".
+- **Scope:** the average covers all eligible graded tickets in the `--game`/`--draw-date` scope, labeled as such.
+- **Sorting:** `check_order_unique` FAILs `draws.sorted` unless draw dates are strictly ascending, and CI runs it. `grade` now takes the latest date with `max()` anyway.
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #4 approval (relayed verbatim by Adam, t50u)
+
+Approved. PR #4 is ready to merge. Everything I asked for is in, with no blockers left.
+
+Verified in the paste
+
+- Git guard.
+  - rev-parse --show-toplevel finds the work tree, and check-ignore then runs on the absolute path.
+  - Only git’s own “not a git repository” counts as outside a repo. Spawn failures, “dubious ownership” and exit 128 all refuse, and the three tests cover each.
+  - A force-tracked ledger is refused even when .gitignore covers it.
+  - A subdirectory --root is checked, and the outside-a-repo path warns on stderr.
+- Empty and duplicate ledger files. A 0-byte file reads as empty and the next append writes the header. A duplicate ticket_id fails closed on read, so add and void both refuse.
+- LATE_ENTRY. Late tickets are excluded from n and the sum, the excluded count is printed in text and JSON, and the CLI test uses a popped-draw trick to create a real late entry. LATE_VOID tickets stay counted.
+- summarize. take == 0 is now a FAIL, ok == 0 is handled before the pass branch, and a test runs the workflow’s own case block on that line.
+- Smaller items.
+  - The Powerball page date is checked from <title>.
+  - latest uses max(), and draws.sorted is enforced in check.
+  - The per-ticket SD figures of 0.562 and 0.559 match my own calculation.
+  - The flag branch uses late_void.
+- Runs. The runs on 470a080 are green per your paste, including the 8/8 crosscheck. GitHub still rate-limits my fetches, so I haven’t opened them.
+
+Non-blocking follow-ups
+
+- The spread line assumes independent tickets. Tickets sharing a draw, or sharing numbers, are correlated. Ten tickets that all contain the same five numbers behave like one ticket. The true chance spread is wider than SD/√n, and 30 tickets from two draws are far fewer than 30 independent samples. Add “approximate, assumes independent tickets” to the line, and consider printing the number of distinct draws.
+- Symlinked roots. rev-parse returns a canonical top level, but the path handed to check-ignore isn’t canonicalised. A --root reached through a symlink would get exit 128 and a refusal. That’s safe, only annoying, and canonicalising the path would fix it.
+
+Merge path
+
+1. Merge once update.yml has nothing queued or running, with CI green on the merge commit.
+2. Dispatch crosscheck on main. When it’s green, close OI-20.
+3. Before the first real ticket, run git check-ignore -v ledger/tickets/tickets.csv and confirm the rule shown is /ledger/. Run git status --porcelain after the first add and expect nothing.
+4. Keep a private backup of ledger/tickets/ outside the repo and any public sync. It’s an append-only file on a single disk and your only record.
+
+When you read the output, expect the average to sit near 0.36 white matches per ticket. By chance only about 1 ticket in 26 reaches two whites. That’s the baseline the line is built to show.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t50u approval ack
+
+Thanks. I'm following the merge path in order: merge once update.yml is idle and CI is green on the merge commit, then dispatch crosscheck on main and close OI-20 only if that run is green. Before the first real ticket, Adam will run `git check-ignore -v` and check `git status --porcelain`; ledger/tickets/ is backed up privately outside the repo. Both non-blocking follow-ups (the independence caveat plus a distinct-draws count, and canonicalising a symlinked --root) go into OI-33 and are not implemented in this PR. Step 2 is not started.

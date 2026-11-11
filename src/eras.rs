@@ -56,6 +56,9 @@ pub struct Era {
     #[serde(default)]
     pub price_usd: Option<u32>,
     pub price_status: String,
+    /// Power Play add-on per play in whole USD (Powerball only; D-031). Absent = not supported.
+    #[serde(default)]
+    pub power_play_price_usd: Option<u32>,
     #[serde(default)]
     pub multiplier: Option<String>,
     /// Independent pool key for white balls (R2-04). Prefer `{game}-white-{max}`.

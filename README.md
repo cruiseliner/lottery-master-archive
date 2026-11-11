@@ -41,12 +41,72 @@ cargo build --release
   (powerball.com draw-result pages, megamillions.com draw API) into the **gitignored `cache/`**.
   Those tables are never committed (see Limitations).
 
+### Ticket ledger and grade (v0.2 Step 1, D-031)
+
+A private, append-only ledger for tickets you actually bought, checked against the archive.
+
+> **Not for real tickets yet.** Do not use `grade` on real tickets until the weekly
+> crosscheck (D-025) has been dispatched once on `main` and come back green (OI-20).
+
+Example numbers below are synthetic.
+
+```
+lottotool ticket add --game pb --draw-date 2026-11-11 --whites 1,2,3,4,5 --special 6 --power-play [--cost 3] [--note "..."]
+lottotool ticket add --game mm --draw-date 2026-11-13 --whites 1,2,3,4,5 --special 6
+lottotool ticket void T0001 --reason "typo in white ball"
+lottotool ticket list [--game pb] [--draw-date YYYY-MM-DD]
+lottotool grade                     # pending tickets + tickets for each game's latest archived draw
+lottotool grade --all [--game mm] [--draw-date YYYY-MM-DD]
+```
+
+* `pb` / `mm` are aliases for `powerball` / `megamillions`.
+* The ledger is `ledger/tickets/tickets.csv` under the **gitignored `ledger/`**. Rows are only
+  appended (never rewritten); `created_at` is UTC. `ticket add` refuses to write if the ledger
+  path is not gitignored, and fails closed on an unexpected header.
+* The git guard locates the work tree with `git rev-parse --show-toplevel` and refuses to write
+  unless `git check-ignore` confirms the ledger path is ignored. Outside a git work tree it
+  prints a warning. Duplicate ticket ids fail closed; a 0-byte file reads as empty.
+* Timestamps come from the local clock: the ledger is a discipline record, not tamper-proof (D-031).
+* Each append is one `write_all` of the whole row followed by an fsync. Before any read or
+  append, the tool checks the file ends in a newline; a partial last line (e.g. after a crash)
+  is refused, never glued onto. This applies to both ledger files.
+* `ticket add` validates against `eras.toml` for the draw date: scheduled draw weekday, ball
+  ranges, five distinct whites, Power Play only for Powerball, and the price (`price_usd`, plus
+  `power_play_price_usd`). `--cost`, if given, must equal that price (strict by decision,
+  D-031). Only eras whose prize chart is encoded (`pb-2015`, `mm-2025`) are accepted.
+* **No back-dating:** `ticket add` refuses a draw that is already in `data/`. A ticket added at
+  or after the 22:00 ET sales cutoff on its draw date (D-030), but before the draw is archived,
+  is accepted and shown as **`LATE_ENTRY`** (not eligible for any scorecard).
+* `ticket void <id> --reason ...` appends a record to `ledger/tickets/tickets_voids.csv`; the
+  ticket row is never changed. Unknown ids and second voids are refused. Re-enter a corrected
+  ticket with `ticket add` (it gets a new id). A void before the sales cutoff removes the ticket
+  from `grade` (counted as "voided excluded"). A void at or after the cutoff is allowed but is
+  **`LATE_VOID`**: the ticket stays graded and counted, so losing tickets can't be erased.
+  `ticket list` marks `VOID` / `LATE_VOID` / `LATE_ENTRY`.
+* `grade` reports white matches, special-ball match, the tier (e.g. `3+1`), whether it is a
+  prize tier on the current chart, and the archive multiplier (Powerball Power Play) when the
+  ticket has it and the archive row has a value. A special ball only matches the drawn special
+  ball, never a drawn white. Draws not yet in `data/` are `PENDING`.
+* Prize **amounts** come only from the private payout cache (`update <game> --payouts`). If
+  the cache has no single unambiguous amount for the tier (no cache, jackpot / pari-mutuel
+  text, several amounts), `grade` prints `TIER_LOOKUP_NEEDED`; it never computes or invents an
+  amount. Grades are computed on demand and never written back into the ledger.
+* `grade` also prints each game's average white matches over **all eligible graded tickets** in
+  the `--game`/`--draw-date` scope (not only the rows shown), next to the chance baseline k²/n
+  (25/69 ≈ 0.362 Powerball, 25/70 ≈ 0.357 Mega Millions), with n, the chance spread of the
+  average (≈ 0.56/√n) and a "too few tickets (<30)" note. `LATE_ENTRY` tickets are excluded
+  and counted. This is a measurement of past tickets, labeled as history, not a prediction.
+* Nothing here predicts numbers. A grade is a record of what happened, not a strategy.
+
 ## Automation
 
 * `.github/workflows/update.yml` runs daily at 06:17 America/New_York (after every draw night):
   update both games, integrity gate, commit, then a full check that fails visibly if a due draw
   is missing. There is also a 45-day keep-alive commit, because GitHub disables schedules in
   public repos after 60 days without activity. It can also be run by hand (`workflow_dispatch`).
+* `.github/workflows/crosscheck.yml` runs weekly (Sundays 16:43 America/New_York) and compares
+  the latest 8 archived draws per game with the official winning-number pages. It is read-only;
+  a mismatch, or zero successful comparisons for a game, fails the run (D-025).
 * `.github/workflows/ci.yml` runs fmt, clippy `-D warnings`, the tests, and the data integrity check.
 * `.github/workflows/release.yml`: on a `v*` tag, it builds a Linux binary and publishes it with `SHA256SUMS`.
 
@@ -76,7 +136,7 @@ discrepancy. See `data/SOURCES.md`.
 * Draw-day schedules before the first sourced change are inferred from the data.
 * The scheduler can be delayed or skipped by GitHub under load. Staleness turns the workflow red
   rather than hiding the problem.
-* There are no tax, annuity or jackpot-size calculations in v0.1.
+* There are no tax, annuity, expected-value or jackpot-size calculations yet (v0.2 Step 4, not started).
 
 ## Roadmap
 

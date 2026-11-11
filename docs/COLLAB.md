@@ -1331,3 +1331,21 @@ Cross-checks
 - The ticket grading rule is right: a ticket’s special ball never matches a drawn white.
 
 Paste the code files and I’ll finish the review. After that, step 2 can start once you’ve confirmed the merge.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t47u provisional review ack + fixes
+
+Your review is recorded verbatim above. All fixes are in commit [`8790f54`](https://github.com/cruiseliner/lottery-master-archive/commit/8790f5483aeea749c4bcd6b3c59da0ba6e128884) on `v0.2-step1-ticket-ledger`. Not merged; Step 2 not started.
+
+**Code at `8790f54`:** [src/tickets.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/tickets.rs) · [tests/tickets.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/tests/tickets.rs) · [tests/check_format.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/tests/check_format.rs) · [src/main.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/main.rs) · [src/eras.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/eras.rs) · [src/check.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/check.rs) · [src/crosscheck.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/crosscheck.rs) · [src/lib.rs](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/src/lib.rs) · [eras.toml](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/eras.toml) · [crosscheck.yml](https://github.com/cruiseliner/lottery-master-archive/blob/8790f5483aeea749c4bcd6b3c59da0ba6e128884/.github/workflows/crosscheck.yml). Whole branch vs base: https://github.com/cruiseliner/lottery-master-archive/compare/625ff56...v0.2-step1-ticket-ledger
+
+- **Silent degradation:** `crosscheck::summarize` makes zero successful comparisons for a game a FAIL. Partial source errors stay WARN. The alert on two consecutive all-WARN weeks is deferred (OI-33); it needs cross-run state.
+- **Tree check:** `git status --porcelain --untracked-files=all`; `check.txt` is written to `$RUNNER_TEMP`.
+- **Output parsing:** line and summary formatting moved to `check::format_line` / `format_summary`. `tests/check_format.rs` reads the `case` block from crosscheck.yml and runs it in bash against real formatted FAIL / zero-comparison / WARN / PASS / integrity lines.
+- **Merge gate:** OI-20 is back to OPEN until crosscheck is dispatched once on `main` and green. README and D-025 say `grade` is not used on real tickets before then.
+- **Back-dating:** `ticket add` refuses a draw already in `data/`. After the D-030 22:00 ET cutoff it **accepts and flags `LATE_ENTRY`** (computed from `created_at`, never stored). I chose that over refusal so a ticket that was really bought but entered late stays on record; D-030 keeps it off any scorecard. Recorded in D-031.
+- **Late voids:** a void at or after the 22:00 ET cutoff is allowed, flagged `LATE_VOID`, kept in `grade` and counted in totals. That is stricter than "after archived". On-time voids are excluded and counted as "voided excluded".
+- **Append robustness:** confirmed one `write_all` per row, then `sync_all`. A newline check now runs before every append, and before every read too, for both `tickets.csv` and `tickets_voids.csv`; a partial last line fails closed. Tested.
+- **README examples:** now synthetic (1,2,3,4,5 / special 6).
+- **Free tickets:** noted under OI-33.
+- **Baseline:** `grade` prints average white matches per game next to k²/n (25/69 ≈ 0.362, 25/70 ≈ 0.357), labeled history, not prediction.
+- Tests: tickets 18, check_format 4; all fake data in temp dirs. No real tickets, picks or payout tables in the change.

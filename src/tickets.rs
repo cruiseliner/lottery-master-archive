@@ -319,7 +319,7 @@ pub fn void(root: &Path, ticket_id: &str, reason: &str, now: DateTime<Utc>) -> R
 /// `git check-ignore` says the ledger path is ignored. Outside any git work tree there is
 /// nothing to commit to, so the write is allowed with a warning on stderr (never silently).
 /// If git cannot be run at all, the write is refused.
-fn ensure_gitignored(root: &Path, path: &Path) -> Result<()> {
+pub fn ensure_gitignored(root: &Path, path: &Path) -> Result<()> {
     match guard_status(root, path)? {
         Guard::Ignored => Ok(()),
         Guard::NotInRepo => {

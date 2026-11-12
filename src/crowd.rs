@@ -357,7 +357,7 @@ pub fn reference_line(game: &str) -> Option<String> {
     let c = calibration(game)?;
     let pct = |n: u64| n as f64 * 100.0 / c.combinations as f64;
     Some(format!(
-        "reference: a random pick typically scores {} (median; mean {:.1}); {:.1}% of all {} white-ball combinations score under 20 and {:.1}% score 0 (exact enumeration; special ball and past winners excluded)",
+        "reference (whites only): a random pick typically scores {} (median; mean {:.1}); {:.1}% of all {} white-ball combinations score under 20 and {:.1}% score 0 (exact enumeration of whites only; a special ball of 7 or 11 adds 3 raw points; past winners excluded)",
         c.p50,
         c.score_sum as f64 / c.combinations as f64,
         pct(c.low),

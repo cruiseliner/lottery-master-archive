@@ -141,6 +141,32 @@ enum Cmd {
         #[arg(long)]
         ticket: Option<String>,
     },
+    /// Fixed-cost coverage set (D-033): at least one ticket matches 2 or more whites for every
+    /// possible draw. Guarantees NO prize. Dry run by default (prints locally, enters nothing).
+    /// WARNING: the output contains real picks; keep it out of COLLAB, commits and run logs
+    /// (D-030).
+    Wheel {
+        #[arg(long)]
+        game: Game,
+        #[arg(long)]
+        draw_date: NaiveDate,
+        /// Required spending cap in whole USD; refused if the full set costs more.
+        #[arg(long)]
+        max_spend: u64,
+        /// Powerball: leave out Power Play (included by default; price from eras.toml).
+        #[arg(long)]
+        no_power_play: bool,
+        /// RNG seed for the relabelling and specials (default: from the clock; printed).
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Number of seeded relabellings to try; the lowest mean crowd score wins.
+        #[arg(long, default_value_t = 16)]
+        permutations: u32,
+        /// Enter the tickets in the private ledger (ticket add rules) and record the seed and
+        /// permutation under ledger/wheels/. Without it nothing is written.
+        #[arg(long)]
+        commit: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -208,6 +234,25 @@ fn run(cli: &Cli) -> Result<ExitCode> {
     let eras = ErasFile::load(&cli.root.join("eras.toml"))?;
     match &cli.cmd {
         Cmd::Ticket { cmd } => run_ticket(cli, &eras, cmd),
+        Cmd::Wheel {
+            game,
+            draw_date,
+            max_spend,
+            no_power_play,
+            seed,
+            permutations,
+            commit,
+        } => run_wheel(
+            cli,
+            &eras,
+            *game,
+            *draw_date,
+            *max_spend,
+            !*no_power_play && *game == Game::Powerball,
+            *seed,
+            *permutations,
+            *commit,
+        ),
         Cmd::Crowd {
             game,
             whites,
@@ -632,6 +677,196 @@ fn fmt_balls(w: &[u32]) -> String {
 
 fn special_label(game: &str) -> &'static str {
     if game == "powerball" { "PB" } else { "MB" }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_wheel(
+    cli: &Cli,
+    eras: &ErasFile,
+    game: Game,
+    draw_date: NaiveDate,
+    max_spend: u64,
+    power_play: bool,
+    seed: Option<u64>,
+    k: u32,
+    commit: bool,
+) -> Result<ExitCode> {
+    use lottotool::wheel;
+    let g = eras.game(game.id())?;
+    let era = g
+        .era_for(draw_date)
+        .with_context(|| format!("no era for {draw_date}"))?;
+    if !g.expected_draw_day(draw_date) {
+        bail!("{draw_date} is not a {} draw day", g.name);
+    }
+    let design = wheel::design_for(era.white_max)
+        .with_context(|| format!("no pinned design for era {} (1..{})", era.id, era.white_max))?;
+    let draws = load_draws(cli, game)?;
+    if draws.iter().any(|d| d.draw_date == draw_date) {
+        bail!(
+            "{} {draw_date} is already in the archive (data/); refusing",
+            g.name
+        );
+    }
+    let per = tickets::expected_cost(era, power_play)?;
+    let count = design.tickets.len();
+    let total = wheel::total_cost(count, per);
+    // Refuse below the minimum before doing anything else (no partial sets).
+    wheel::check_budget(max_spend, total, count)?;
+    let seed = seed.unwrap_or_else(|| {
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        t ^ (u64::from(std::process::id()) << 32)
+    });
+    let plan = wheel::plan(game.id(), era, &design, seed, k, &draws)?;
+    // Coverage was re-verified on the relabelled set inside plan(); check once more here on
+    // exactly what will be printed / entered.
+    let final_set = wheel::Wheel {
+        n: era.white_max,
+        groups: wheel::relabel(&design.wheel(), &plan.permutation).groups,
+        tickets: plan.tickets.iter().map(|t| t.whites).collect(),
+    };
+    wheel::verify(&final_set)?;
+    let cost_line = format!(
+        "{count} tickets x ${per}{} = ${total} total (max spend ${max_spend})",
+        if power_play {
+            " (incl. Power Play)"
+        } else {
+            ""
+        }
+    );
+    if !commit && cli.json {
+        println!(
+            "{}",
+            json!({"ok": true, "dry_run": true, "game": game.id(), "draw_date": draw_date,
+                   "guarantee": wheel::GUARANTEE, "caveats": wheel::CAVEATS,
+                   "tickets_count": count, "per_ticket_usd": per, "total_usd": total,
+                   "power_play": power_play, "plan": plan, "private": "real picks; keep out of COLLAB, commits and logs (D-030)"})
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    if commit && cli.json {
+        // JSON mode still states the guarantee and total before anything is entered.
+        eprintln!("GUARANTEE: {}", wheel::GUARANTEE);
+        eprintln!("COST: {cost_line}");
+    }
+    if !cli.json {
+        println!("GUARANTEE: {}", wheel::GUARANTEE);
+        for c in wheel::CAVEATS {
+            println!("  - {c}");
+        }
+        println!("COST: {cost_line}");
+        println!(
+            "verified: {} groups {:?}, {} same-group pairs all covered, {} tickets",
+            plan.verified.groups,
+            plan.verified.group_sizes,
+            plan.verified.required_pairs,
+            plan.verified.tickets
+        );
+        println!(
+            "relabelling: seed {seed}, best of {k} by mean crowd score (#{}: mean {:.2}, max {})",
+            plan.chosen + 1,
+            plan.mean_crowd_score,
+            plan.max_crowd_score
+        );
+        println!(
+            "PRIVATE: the lines below are real picks; keep them out of COLLAB, commits and logs (D-030)."
+        );
+        for (i, t) in plan.tickets.iter().enumerate() {
+            println!(
+                "  {:>2}. {} {} {}  crowd {}",
+                i + 1,
+                fmt_balls(&t.whites),
+                special_label(game.id()),
+                t.special,
+                t.crowd_score
+            );
+        }
+    }
+    if !commit {
+        println!(
+            "dry run: nothing entered. To enter exactly these tickets: --seed {seed} --permutations {k} --commit"
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    // --commit: ledger rules (D-031) for every ticket, checked before anything is written.
+    let now = Utc::now();
+    if now >= tickets::sales_cutoff(draw_date)? {
+        bail!(
+            "past the {draw_date} 22:00 ET sales cutoff (D-030); a coverage set is not entered late"
+        );
+    }
+    let new: Vec<NewTicket> = plan
+        .tickets
+        .iter()
+        .map(|t| NewTicket {
+            game,
+            draw_date,
+            whites: t.whites.to_vec(),
+            special: t.special,
+            power_play,
+            cost_usd: None,
+            note: format!("wheel seed {seed} #{}", plan.chosen + 1),
+        })
+        .collect();
+    for t in &new {
+        let (_, cost) = tickets::validate(g, t)?;
+        if cost != per {
+            bail!("ticket cost ${cost} != planned ${per}; refusing");
+        }
+    }
+    tickets::read_ledger(&cli.root)?; // fail closed on a damaged ledger before writing
+    tickets::ensure_gitignored(&cli.root, &tickets::ledger_path(&cli.root))?;
+    let rec_path =
+        cli.root
+            .join("ledger/wheels")
+            .join(format!("{}_{}_{}.json", game.id(), draw_date, seed));
+    tickets::ensure_gitignored(&cli.root, &rec_path)?;
+    if rec_path.exists() {
+        bail!(
+            "{} exists; this seed was already entered",
+            rec_path.display()
+        );
+    }
+    let mut ids = Vec::new();
+    for t in &new {
+        let row = tickets::append(&cli.root, g, t, &draws, now).with_context(|| {
+            format!(
+                "stopped after entering {} of {} tickets ({}); the set is incomplete and its guarantee does not hold",
+                ids.len(),
+                new.len(),
+                ids.join(", ")
+            )
+        })?;
+        ids.push(row.ticket_id);
+    }
+    let record = json!({
+        "game": game.id(), "draw_date": draw_date, "seed": seed, "permutations_tried": k,
+        "chosen": plan.chosen, "permutation": plan.permutation, "ticket_ids": ids,
+        "total_usd": total, "power_play": power_play, "guarantee": wheel::GUARANTEE,
+        "created_at": now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    });
+    std::fs::create_dir_all(rec_path.parent().expect("has parent"))?;
+    data::write_bytes_atomic(&rec_path, serde_json::to_string_pretty(&record)?.as_bytes())?;
+    if cli.json {
+        println!(
+            "{}",
+            json!({"ok": true, "dry_run": false, "ticket_ids": ids, "total_usd": total,
+                   "guarantee": wheel::GUARANTEE, "caveats": wheel::CAVEATS, "plan": plan,
+                   "record": "private (ledger/wheels/, gitignored)"})
+        );
+    } else {
+        println!(
+            "entered {} tickets ({} .. {}) for ${total}; seed and permutation recorded privately in {}",
+            ids.len(),
+            ids.first().map(String::as_str).unwrap_or(""),
+            ids.last().map(String::as_str).unwrap_or(""),
+            rec_path.display()
+        );
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn run_crowd(

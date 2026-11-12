@@ -332,7 +332,7 @@ fn crowd_prints_breakdown_and_disclaimer_in_text_and_json() {
         "{out}"
     );
     assert!(
-        out.contains("reference: a random pick typically scores 0"),
+        out.contains("reference (whites only): a random pick typically scores 0"),
         "{out}"
     );
 
@@ -410,5 +410,195 @@ fn crowd_scores_a_ledger_ticket_by_id() {
         &["crowd", "--ticket", "T0001", "--whites", "1,2,3,4,5"],
     );
     assert!(!o.status.success());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn wheel_refuses_below_minimum_and_dry_run_writes_nothing() {
+    let root = temp_repo("wheel-dry");
+    let o = run(
+        &root,
+        &[
+            "wheel",
+            "--game",
+            "pb",
+            "--draw-date",
+            "2030-01-02",
+            "--max-spend",
+            "188",
+        ],
+    );
+    let (out, err) = text(&o);
+    assert!(!o.status.success(), "{out}");
+    assert!(err.contains("minimum budget $189"), "{err}");
+    assert!(err.contains("no partial"), "{err}");
+    assert!(
+        out.is_empty(),
+        "no tickets offered below the minimum: {out}"
+    );
+
+    let o = run(
+        &root,
+        &[
+            "wheel",
+            "--game",
+            "pb",
+            "--draw-date",
+            "2030-01-02",
+            "--max-spend",
+            "189",
+            "--seed",
+            "1",
+        ],
+    );
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    assert!(out.starts_with(
+        "GUARANTEE: At least one ticket matches 2 or more whites for every possible draw."
+    ));
+    assert!(out.contains("guarantees no prize"), "{out}");
+    assert!(
+        out.contains("COST: 63 tickets x $3 (incl. Power Play) = $189 total"),
+        "{out}"
+    );
+    assert!(out.contains("595 same-group pairs all covered"), "{out}");
+    assert!(out.contains("dry run: nothing entered"), "{out}");
+    assert!(!root.join("ledger").exists(), "dry run wrote nothing");
+
+    let o = run(
+        &root,
+        &[
+            "wheel",
+            "--game",
+            "pb",
+            "--draw-date",
+            "2030-01-02",
+            "--max-spend",
+            "126",
+            "--no-power-play",
+            "--seed",
+            "1",
+        ],
+    );
+    assert!(
+        text(&o).0.contains("COST: 63 tickets x $2 = $126 total"),
+        "{:?}",
+        text(&o)
+    );
+    let o = run(
+        &root,
+        &[
+            "wheel",
+            "--game",
+            "mm",
+            "--draw-date",
+            "2030-01-04",
+            "--max-spend",
+            "325",
+            "--seed",
+            "1",
+        ],
+    );
+    assert!(
+        text(&o).0.contains("COST: 65 tickets x $5 = $325 total"),
+        "{:?}",
+        text(&o)
+    );
+    // Archived draws and non-draw days are refused.
+    let date = last_draw_date(&root, "powerball");
+    let o = run(
+        &root,
+        &[
+            "wheel",
+            "--game",
+            "pb",
+            "--draw-date",
+            &date,
+            "--max-spend",
+            "999",
+        ],
+    );
+    assert!(
+        text(&o).1.contains("already in the archive"),
+        "{:?}",
+        text(&o)
+    );
+    let o = run(
+        &root,
+        &[
+            "wheel",
+            "--game",
+            "pb",
+            "--draw-date",
+            "2030-01-03",
+            "--max-spend",
+            "999",
+        ],
+    );
+    assert!(
+        text(&o).1.contains("not a Powerball draw day"),
+        "{:?}",
+        text(&o)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn wheel_commit_enters_every_ticket_through_the_ledger_rules() {
+    let root = temp_repo("wheel-commit");
+    let args = [
+        "wheel",
+        "--game",
+        "pb",
+        "--draw-date",
+        "2030-01-02",
+        "--max-spend",
+        "189",
+        "--seed",
+        "5",
+        "--permutations",
+        "2",
+    ];
+    let dry = text(&run(&root, &args)).0;
+    let mut commit = args.to_vec();
+    commit.push("--commit");
+    let o = run(&root, &commit);
+    let (out, err) = text(&o);
+    assert!(o.status.success(), "{out}\n{err}");
+    assert!(
+        out.contains("entered 63 tickets (T0001 .. T0063) for $189"),
+        "{out}"
+    );
+    // Same seed -> the committed tickets are exactly the dry-run tickets.
+    let shown: Vec<&str> = dry.lines().filter(|l| l.contains(" PB ")).collect();
+    assert_eq!(shown.len(), 63);
+    let ledger = std::fs::read_to_string(root.join("ledger/tickets/tickets.csv")).unwrap();
+    assert_eq!(ledger.lines().count(), 64, "header + 63 rows");
+    assert!(
+        ledger
+            .lines()
+            .skip(1)
+            .all(|l| l.contains(",true,3,wheel seed 5 #"))
+    );
+    let rec = root.join("ledger/wheels/powerball_2030-01-02_5.json");
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&rec).unwrap()).unwrap();
+    assert_eq!(v["seed"], 5);
+    assert_eq!(v["permutation"].as_array().unwrap().len(), 69);
+    assert_eq!(v["ticket_ids"].as_array().unwrap().len(), 63);
+    if root.join(".git").exists() {
+        let st = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["status", "--porcelain", "--untracked-files=all"])
+            .output()
+            .unwrap();
+        let st = String::from_utf8_lossy(&st.stdout);
+        assert!(!st.contains("ledger"), "private files visible to git: {st}");
+    }
+    // The same seed cannot be entered twice.
+    let o = run(&root, &commit);
+    assert!(!o.status.success());
+    assert!(text(&o).1.contains("already entered"), "{:?}", text(&o));
     let _ = std::fs::remove_dir_all(&root);
 }

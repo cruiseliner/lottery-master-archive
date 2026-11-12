@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Added (2026-11-11 — v0.2 Step 3, D-033)
+- `lottotool wheel --game pb|mm --draw-date D --max-spend USD [--no-power-play] [--seed S] [--permutations K] [--commit]`: fixed-cost coverage set guaranteeing at least one ticket with 2+ white matches for every draw (no prize guaranteed). Pinned, verified sets: PB 63 tickets, MM 65 (Turán bound 57/58). Dry run by default; `--commit` uses the ticket ledger rules and records the seed/permutation privately. Spec: `docs/COVERAGE_SET.md`. Tests: `tests/wheel.rs` + 2 CLI tests.
+- Crowd reference line now says "whites only" (Claude t53u): a special ball of 7 or 11 adds 3 raw points.
+
 ### Added (2026-11-11 — v0.2 Step 2, D-032)
 - `lottotool crowd --game pb|mm --whites a,b,c,d,e [--special N]` or `--ticket <id>`, text and `--json`: anti-crowd heuristic score (0–100) with a per-factor breakdown and reasons. Every output states it does not change the odds of winning. Weights are judgment; directions cited to Wang et al. 2016 (JDM). The archive is read only for the exact-past-winner flag. Tests: `tests/crowd.rs` (synthetic combos/draws) plus two CLI tests. OI-34 lists deferred items.
 - Adam t51s258 tuning: birthdays and sequence max 20 each; raw total 90 rescaled to 0–100 (bands unchanged); past-winner check also covers Powerball Double Play numbers already in `data/` (from 2026-06-03); playslip patterns won't do; 4-of-5 sequences left in OI-34.

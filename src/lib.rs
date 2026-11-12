@@ -16,6 +16,7 @@ pub mod payouts;
 pub mod rng;
 pub mod summary;
 pub mod tickets;
+pub mod wheel;
 
 use std::path::{Path, PathBuf};
 

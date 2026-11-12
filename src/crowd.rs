@@ -16,7 +16,7 @@ use serde::Serialize;
 
 /// Printed with every result, text and JSON.
 pub const DISCLAIMER: &str = "This does NOT make a ticket likelier to win: every combination has exactly the same odds. \
-The score only aims to lower the chance of splitting a jackpot with other players if this combination wins. \
+It affects jackpot sharing only (lower prizes are fixed amounts): the score only aims to lower the chance of splitting a jackpot with other players if this combination wins. \
 Heuristic weights (judgment), not measured player data.";
 
 /// Reported score range: 0..=100. Raw factor points (max [`RAW_MAX`]) are rescaled,
@@ -56,6 +56,9 @@ pub struct CrowdReport {
     pub factors: Vec<Factor>,
     /// Archived draws (main or Double Play) with these exact five whites (popularity only).
     pub past_winners: Vec<PastWinner>,
+    /// Exact distribution of scores over all white-ball combinations (not from draw history).
+    pub calibration: Option<Calibration>,
+    pub reference: Option<String>,
     pub disclaimer: &'static str,
 }
 
@@ -297,6 +300,72 @@ fn past_winner(w: &[u32; 5], draws: &[Draw]) -> (Factor, Vec<PastWinner>) {
     (f, hits)
 }
 
+/// Exact score distribution over every white-ball combination of the current era, computed
+/// offline by full enumeration (`tests/crowd.rs`, ignored test
+/// `calibration_constants_match_full_enumeration`). Special ball = none and `past_winner` = 0
+/// (no draw history is used). Never derived from draw history.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub struct Calibration {
+    pub combinations: u64,
+    pub score_sum: u64,
+    /// Combinations scoring exactly 0.
+    pub zero: u64,
+    pub p50: u32,
+    pub p90: u32,
+    pub p95: u32,
+    pub p99: u32,
+    pub low: u64,
+    pub medium: u64,
+    pub high: u64,
+}
+
+pub const CALIBRATION_PB: Calibration = Calibration {
+    combinations: 11_238_513, // C(69,5)
+    score_sum: 44_537_647,
+    zero: 5_955_637,
+    p50: 0,
+    p90: 13,
+    p95: 17,
+    p99: 29,
+    low: 10_759_239,
+    medium: 479_008,
+    high: 266,
+};
+pub const CALIBRATION_MM: Calibration = Calibration {
+    combinations: 12_103_014, // C(70,5)
+    score_sum: 46_786_001,
+    zero: 6_539_960,
+    p50: 0,
+    p90: 11,
+    p95: 17,
+    p99: 29,
+    low: 11_602_954,
+    medium: 499_791,
+    high: 269,
+};
+
+pub fn calibration(game: &str) -> Option<Calibration> {
+    match game {
+        "powerball" => Some(CALIBRATION_PB),
+        "megamillions" => Some(CALIBRATION_MM),
+        _ => None,
+    }
+}
+
+/// One reference line for the output: what a uniformly random pick scores.
+pub fn reference_line(game: &str) -> Option<String> {
+    let c = calibration(game)?;
+    let pct = |n: u64| n as f64 * 100.0 / c.combinations as f64;
+    Some(format!(
+        "reference: a random pick typically scores {} (median; mean {:.1}); {:.1}% of all {} white-ball combinations score under 20 and {:.1}% score 0 (exact enumeration; special ball and past winners excluded)",
+        c.p50,
+        c.score_sum as f64 / c.combinations as f64,
+        pct(c.low),
+        c.combinations,
+        pct(c.zero)
+    ))
+}
+
 pub fn band(score: u32) -> &'static str {
     match score {
         0..20 => "low",
@@ -340,6 +409,8 @@ pub fn score(
         band: band(score),
         factors,
         past_winners,
+        calibration: calibration(game),
+        reference: reference_line(game),
         disclaimer: DISCLAIMER,
     })
 }

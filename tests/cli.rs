@@ -331,6 +331,10 @@ fn crowd_prints_breakdown_and_disclaimer_in_text_and_json() {
         out.contains("does NOT make a ticket likelier to win"),
         "{out}"
     );
+    assert!(
+        out.contains("reference: a random pick typically scores 0"),
+        "{out}"
+    );
 
     let o = run(
         &root,
@@ -349,6 +353,8 @@ fn crowd_prints_breakdown_and_disclaimer_in_text_and_json() {
     assert_eq!(v["crowd"]["score"], 0);
     assert_eq!(v["crowd"]["band"], "low");
     assert_eq!(v["crowd"]["raw_max"], 90);
+    assert_eq!(v["crowd"]["calibration"]["combinations"], 12_103_014);
+    assert!(v["crowd"]["reference"].as_str().unwrap().contains("95.9%"));
     assert!(v["crowd"]["past_winners"].as_array().unwrap().is_empty());
     assert_eq!(v["weights"], "judgment");
     assert!(

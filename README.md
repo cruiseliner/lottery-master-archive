@@ -126,6 +126,11 @@ so the bands keep the same meaning as a share of the maximum. The raw points are
 | `past_winner` | 10 | the same five whites were drawn before: main draw (any era in `data/`) or Powerball Double Play (in `data/` only from 2026-06-03; earlier Double Play is MISSING) | judgment; popularity only, odds unchanged |
 
 Synthetic examples: `1 2 3 4 5` PB 6 scores 67/100 (raw 60/90, high); `8 24 39 52 66` scores 0/100 (low).
+**Don't chase 0:** most random picks already score low (exactly, over every white-ball
+combination: about 53 % score 0 and about 96 % score under 20), so the only goal is to avoid
+obvious patterns. Each result prints that reference line. The special ball only affects the 7/11
+check. The score affects jackpot sharing only; lower prizes are fixed amounts. `crowd --ticket`
+prints your real picks: keep that output out of COLLAB, commits and logs (D-030).
 The point values are judgment. "Basis" only says which *direction* comes from published
 research (Wang, Potter van Loon, van den Assem & van Dolder, "Number preferences in lotteries",
 *Judgment and Decision Making* 11(3), 2016, Dutch Lotto 6/45 and a casino game, not US games).

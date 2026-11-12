@@ -136,7 +136,8 @@ enum Cmd {
         /// Powerball / Mega Ball (optional; only the 7/11 check uses it).
         #[arg(long, conflicts_with = "ticket")]
         special: Option<u32>,
-        /// Score a ticket from the private ledger by id (e.g. T0001); output stays local.
+        /// Score a ticket from the private ledger by id (e.g. T0001). WARNING: the output
+        /// contains your real picks; keep it out of COLLAB, commits and run logs (D-030).
         #[arg(long)]
         ticket: Option<String>,
     },
@@ -710,6 +711,9 @@ fn run_crowd(
     println!(
         "  (higher = more likely to be shared with other players; heuristic, not measured data)"
     );
+    if let Some(line) = &r.reference {
+        println!("  {line}");
+    }
     println!("{}", lottotool::crowd::DISCLAIMER);
     Ok(ExitCode::SUCCESS)
 }

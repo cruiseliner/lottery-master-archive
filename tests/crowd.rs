@@ -231,6 +231,7 @@ fn disclaimer_says_odds_are_unchanged() {
     assert!(DISCLAIMER.contains("does NOT make a ticket likelier to win"));
     assert!(DISCLAIMER.contains("exactly the same odds"));
     assert!(DISCLAIMER.contains("splitting a jackpot"));
+    assert!(DISCLAIMER.contains("affects jackpot sharing only (lower prizes are fixed amounts)"));
     assert_eq!(pb(&[1, 2, 3, 4, 5], None).disclaimer, DISCLAIMER);
 }
 
@@ -300,4 +301,132 @@ fn rescaling_keeps_the_bands_as_a_share_of_the_max() {
     assert_eq!(crowd::band(crowd::rescale(44)), "medium");
     assert_eq!(crowd::band(crowd::rescale(45)), "high");
     assert_eq!(crowd::rescale(500), 100);
+}
+
+/// Exact score distribution over every white-ball combination (special = None, no draws, so
+/// `past_winner` = 0). Returns a histogram indexed by rescaled score 0..=100.
+fn enumerate(game: &str) -> Vec<u64> {
+    let e = era(game);
+    let n = e.white_max;
+    let firsts: Vec<u32> = (1..=n - 4).collect();
+    let chunks: Vec<Vec<u32>> = firsts.chunks(4).map(|c| c.to_vec()).collect();
+    let handles: Vec<_> = chunks
+        .into_iter()
+        .map(|chunk| {
+            let e = e.clone();
+            let game = game.to_string();
+            std::thread::spawn(move || {
+                let mut hist = vec![0u64; 101];
+                for a in chunk {
+                    for b in a + 1..=n - 3 {
+                        for c in b + 1..=n - 2 {
+                            for d in c + 1..=n - 1 {
+                                for x in d + 1..=n {
+                                    let r = crowd::score(&game, &e, &[a, b, c, d, x], None, &[])
+                                        .unwrap();
+                                    hist[r.score as usize] += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                hist
+            })
+        })
+        .collect();
+    let mut hist = vec![0u64; 101];
+    for h in handles {
+        for (i, v) in h.join().unwrap().into_iter().enumerate() {
+            hist[i] += v;
+        }
+    }
+    hist
+}
+
+/// Nearest-rank percentile: smallest score s with cumulative count >= p% of the total.
+fn percentile(hist: &[u64], p: u64) -> u32 {
+    let total: u64 = hist.iter().sum();
+    let mut cum = 0;
+    for (s, &v) in hist.iter().enumerate() {
+        cum += v;
+        if cum * 100 >= total * p {
+            return s as u32;
+        }
+    }
+    100
+}
+
+#[test]
+#[ignore = "full enumeration of C(69,5) + C(70,5); run with --release -- --ignored"]
+fn calibration_constants_match_full_enumeration() {
+    for game in ["powerball", "megamillions"] {
+        let hist = enumerate(game);
+        let total: u64 = hist.iter().sum();
+        let sum: u64 = hist.iter().enumerate().map(|(s, v)| s as u64 * v).sum();
+        let low: u64 = hist[..20].iter().sum();
+        let medium: u64 = hist[20..50].iter().sum();
+        let high: u64 = hist[50..].iter().sum();
+        let c = crowd::calibration(game).unwrap();
+        let zero = hist[0];
+        println!("{game}: score 0 count {zero}; score_sum {sum}");
+        println!(
+            "{game}: total {total} mean {:.3} p50 {} p90 {} p95 {} p99 {} max {} low {low} medium {medium} high {high}",
+            sum as f64 / total as f64,
+            percentile(&hist, 50),
+            percentile(&hist, 90),
+            percentile(&hist, 95),
+            percentile(&hist, 99),
+            hist.iter().rposition(|&v| v > 0).unwrap()
+        );
+        if std::env::var("CROWD_PRINT_ONLY").is_ok() {
+            continue;
+        }
+        assert_eq!(total, c.combinations, "{game}");
+        assert_eq!(percentile(&hist, 50), c.p50, "{game}");
+        assert_eq!(percentile(&hist, 90), c.p90, "{game}");
+        assert_eq!(percentile(&hist, 95), c.p95, "{game}");
+        assert_eq!(percentile(&hist, 99), c.p99, "{game}");
+        assert_eq!((low, medium, high), (c.low, c.medium, c.high), "{game}");
+        assert_eq!(sum, c.score_sum, "{game}");
+    }
+}
+
+#[test]
+fn calibration_constants_are_consistent_and_printed() {
+    // Fast check of the pinned constants; the exact values come from the ignored
+    // full-enumeration test above (run: cargo test --release --test crowd -- --ignored).
+    for (game, n) in [("powerball", 11_238_513u64), ("megamillions", 12_103_014)] {
+        let c = crowd::calibration(game).unwrap();
+        assert_eq!(c.combinations, n, "{game}: C(n,5)");
+        assert_eq!(c.low + c.medium + c.high, c.combinations, "{game}");
+        assert!(c.zero <= c.low && c.p50 <= c.p90 && c.p90 <= c.p95 && c.p95 <= c.p99);
+        assert!(c.p95 < 20, "{game}: 95th percentile is LOW");
+        let r = crowd::score(game, &era(game), &[8, 24, 39, 52, 66], None, &[]).unwrap();
+        assert_eq!(r.calibration, Some(c));
+        assert_eq!(r.reference, crowd::reference_line(game));
+    }
+    assert_eq!(
+        crowd::reference_line("powerball").unwrap(),
+        "reference: a random pick typically scores 0 (median; mean 4.0); 95.7% of all 11238513 white-ball combinations score under 20 and 53.0% score 0 (exact enumeration; special ball and past winners excluded)"
+    );
+    assert_eq!(
+        crowd::reference_line("megamillions").unwrap(),
+        "reference: a random pick typically scores 0 (median; mean 3.9); 95.9% of all 12103014 white-ball combinations score under 20 and 54.0% score 0 (exact enumeration; special ball and past winners excluded)"
+    );
+}
+
+#[test]
+fn special_ball_only_moves_the_lucky_factor() {
+    let e = era("powerball");
+    for sp in 1..=e.bonus_max {
+        let a = crowd::score("powerball", &e, &[8, 24, 39, 52, 66], None, &[]).unwrap();
+        let b = crowd::score("powerball", &e, &[8, 24, 39, 52, 66], Some(sp), &[]).unwrap();
+        let expected = if sp == 7 || sp == 11 { 3 } else { 0 };
+        assert_eq!(b.raw_points - a.raw_points, expected, "special {sp}");
+        for (fa, fb) in a.factors.iter().zip(&b.factors) {
+            if fa.id != "lucky_numbers" {
+                assert_eq!(fa, fb);
+            }
+        }
+    }
 }

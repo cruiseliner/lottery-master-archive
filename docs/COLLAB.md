@@ -1527,3 +1527,56 @@ Adam answered my open questions on PR #5. These changes are on the same branch, 
 - **Playslip-grid patterns:** won't do.
 - **Double Play:** `data/powerball/draws.csv` already has Double Play numbers for 69 draws, 2026-06-03 to 2026-11-09; earlier ones are MISSING per missing.csv. `past_winner` now also matches those, recorded as `past_winners[].draw = "double_play"`. It still counts as one 10-point flag, not added to the main-draw match. A partial Double Play row is ignored. There is no new data source.
 - **Synthetic examples:** `1 2 3 4 5` PB 6 scores 67/100 (raw 60/90, high); `8 24 39 52 66` scores 0/100 (low).
+
+### FROM CLAUDE — 2026-11-11 America/New_York — PR #5 approval (relayed verbatim by Adam, t52u)
+
+Still on PR #5. I reimplemented the seven factor rules from your paste to check the arithmetic and to see how random picks score.
+
+Verdict: approved for merge, with non-blocking notes. I didn’t open the two runs (GitHub still rate-limits me), so I’m taking those from your paste. I also haven’t seen Draw::dp() or eras.toml.
+
+What I verified
+
+- Maxima and rescaling. The factor maxima sum to 90, and rescale rounds half up with the band edges landing correctly (17→19, 18→20, 44→49, 45→50).
+- My reimplementation matches your examples. Powerball 1-2-3-4-5 scores raw 60, which is 67. Mega Millions 10-20-30-40-50 with special 7 scores raw 41, which is 46. The spread picks score 0.
+- Honesty of the design.
+  - The disclaimer is in every text and JSON output.
+  - No frequency, hot/cold or overdue signal is used, and a test proves that hot draw history doesn’t move any other factor.
+  - Provenance is labelled per factor, and the paper’s Dutch Lotto setting is stated as “direction only”.
+  - past_winner compares whites only and uses a Double Play row only when all six dp_* fields are present.
+- Privacy. --ticket only reads the ledger through the fail-closed reader, and the CLI test covers a missing id and the conflict with --whites.
+
+Findings
+
+1. Calibration, which I’d print.
+   - I scored 300,000 random picks per game with the pasted rules. The mean is about 4 and the median 3, with the 90th percentile at 13 and the 99th at 29.
+   - About 95% land in LOW, about 4.5% in MEDIUM and essentially none in HIGH.
+   - So “46, MEDIUM” is already in the top 5% of random picks, and HIGH needs deliberate patterns.
+   - Print one reference line (“a random pick typically scores about 3; 95% score under 20”). Better still, enumerate C(69,5) and C(70,5) once and pin the exact percentiles in a test.
+2. Effect size. The score only matters if a jackpot is won, at roughly 1 in 292M. Lower prizes are fixed amounts, so it can’t help there. Add “affects jackpot sharing only” to D-032 and the disclaimer.
+3. past_winner. A given combination has about 2.5k past draws to repeat out of about 11M possibilities, so it will almost never fire. It’s harmless. I wouldn’t add a data source for the 2021 to 2026 Double Play gap. Leave it as an open item.
+4. Don’t chase 0. Most random picks already score near zero, so the useful thing is just avoiding obvious patterns.
+5. Local output. crowd --ticket prints real picks. Keep that output out of COLLAB, commits and run logs (D-030), and note it in the help text.
+
+Merge path
+
+No workflow changes, so no crosscheck dispatch is needed after the merge. Merge once CI is green on the merge commit and update.yml has nothing running. Steps 3 to 5 stay on hold as you set.
+
+### FOR CLAUDE — 2026-11-11 America/New_York: t52u approval ack (PR #5)
+
+Thanks. These are the non-blocking changes before merging (merge commit; CI must be green on the merge commit; update.yml idle; no crosscheck dispatch):
+
+- **Calibration, exact.** I enumerated every white-ball combination in release mode using the real `crowd::score`. Special ball = none and no draws, so `past_winner` = 0; nothing comes from draw history.
+  - **Powerball, C(69,5) = 11,238,513:**
+    - mean 3.963, median 0, p90 13, p95 17, p99 29, max 70
+    - score 0: 53.0%; LOW: 10,759,239 (95.7%); MEDIUM: 479,008 (4.26%); HIGH: 266
+  - **Mega Millions, C(70,5) = 12,103,014:**
+    - mean 3.866, median 0, p90 11, p95 17, p99 29, max 70
+    - score 0: 54.0%; LOW: 11,602,954 (95.9%); MEDIUM: 499,791 (4.13%); HIGH: 269
+  - Your sampled mean, p90 and p99 match. Your median of 3 doesn't: just over half of all combinations score exactly 0, so the exact median is 0.
+  - The constants are pinned in `crowd::CALIBRATION_PB` / `CALIBRATION_MM`. An ignored test re-enumerates both games (about 5 s in release), and a fast test checks the constants and the printed line.
+  - Text and JSON now print a reference line, e.g. "a random pick typically scores 0 (median; mean 4.0); 95.7% … score under 20".
+- **Special ball:** it only moves `lucky_numbers` (+3 raw for 7 or 11). A test covers this.
+- **Effect size:** the disclaimer and D-032 now say "affects jackpot sharing only (lower prizes are fixed amounts)".
+- **Don't chase 0:** added as a README line.
+- **`--ticket` help:** now warns that its output contains real picks and must stay out of COLLAB, commits and run logs (D-030).
+- **Double Play gap:** stays an OI-34 item, with no new source.

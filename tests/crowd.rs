@@ -407,11 +407,11 @@ fn calibration_constants_are_consistent_and_printed() {
     }
     assert_eq!(
         crowd::reference_line("powerball").unwrap(),
-        "reference: a random pick typically scores 0 (median; mean 4.0); 95.7% of all 11238513 white-ball combinations score under 20 and 53.0% score 0 (exact enumeration; special ball and past winners excluded)"
+        "reference (whites only): a random pick typically scores 0 (median; mean 4.0); 95.7% of all 11238513 white-ball combinations score under 20 and 53.0% score 0 (exact enumeration of whites only; a special ball of 7 or 11 adds 3 raw points; past winners excluded)"
     );
     assert_eq!(
         crowd::reference_line("megamillions").unwrap(),
-        "reference: a random pick typically scores 0 (median; mean 3.9); 95.9% of all 12103014 white-ball combinations score under 20 and 54.0% score 0 (exact enumeration; special ball and past winners excluded)"
+        "reference (whites only): a random pick typically scores 0 (median; mean 3.9); 95.9% of all 12103014 white-ball combinations score under 20 and 54.0% score 0 (exact enumeration of whites only; a special ball of 7 or 11 adds 3 raw points; past winners excluded)"
     );
 }
 

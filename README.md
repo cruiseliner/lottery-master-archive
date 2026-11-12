@@ -127,7 +127,8 @@ so the bands keep the same meaning as a share of the maximum. The raw points are
 
 Synthetic examples: `1 2 3 4 5` PB 6 scores 67/100 (raw 60/90, high); `8 24 39 52 66` scores 0/100 (low).
 **Don't chase 0:** most random picks already score low (exactly, over every white-ball
-combination: about 53 % score 0 and about 96 % score under 20), so the only goal is to avoid
+combination, **whites only**: about 53 % score 0 and about 96 % score under 20; a special
+ball of 7 or 11 adds points, and with a uniformly random special ball the zero share is 48.9 % PB / 49.5 % MM), so the only goal is to avoid
 obvious patterns. Each result prints that reference line. The special ball only affects the 7/11
 check. The score affects jackpot sharing only; lower prizes are fixed amounts. `crowd --ticket`
 prints your real picks: keep that output out of COLLAB, commits and logs (D-030).
@@ -136,6 +137,25 @@ research (Wang, Potter van Loon, van den Assem & van Dolder, "Number preferences
 *Judgment and Decision Making* 11(3), 2016, Dutch Lotto 6/45 and a casino game, not US games).
 No draw frequency, hot/cold, overdue or other prediction signal is used; the archive is read
 only for the exact-past-winner check. Playslip-grid patterns are not scored (won't do, Adam 2026-11-11).
+
+### Coverage set (v0.2 Step 3, D-033)
+
+> **At least one ticket matches 2 or more whites for every possible draw.** That is all it
+> guarantees. It guarantees **no prize** (2 whites without the special ball pays $0), expected
+> value is negative, no ticket's odds change, and draws are independent.
+
+```sh
+lottotool wheel --game pb --draw-date 2030-01-02 --max-spend 189            # dry run (default)
+lottotool wheel --game pb --draw-date 2030-01-02 --max-spend 189 --seed S --commit
+```
+
+* Powerball: 63 tickets, $189 with Power Play (default) or $126 with `--no-power-play`.
+  Mega Millions: 65 tickets, $325. A `--max-spend` below that is refused (no partial sets).
+* The set is verified in code before any output. Numbers are relabelled by a seeded random
+  permutation (best of 16 by mean crowd score); specials are random and carry no guarantee.
+* `--commit` enters every ticket through the ticket-ledger rules and records the seed and
+  permutation privately under `ledger/wheels/`. The output contains real picks: keep it out of
+  COLLAB, commits and logs (D-030). Spec and lower bound: `docs/COVERAGE_SET.md`.
 
 ## Automation
 

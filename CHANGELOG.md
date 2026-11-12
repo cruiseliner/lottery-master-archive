@@ -4,6 +4,11 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Added (2026-11-11 — v0.2 Step 2, D-032)
+- `lottotool crowd --game pb|mm --whites a,b,c,d,e [--special N]` or `--ticket <id>`, text and `--json`: anti-crowd heuristic score (0–100) with a per-factor breakdown and reasons. Every output states it does not change the odds of winning. Weights are judgment; directions cited to Wang et al. 2016 (JDM). The archive is read only for the exact-past-winner flag. Tests: `tests/crowd.rs` (synthetic combos/draws) plus two CLI tests. OI-34 lists deferred items.
+- Adam t51s258 tuning: birthdays and sequence max 20 each; raw total 90 rescaled to 0–100 (bands unchanged); past-winner check also covers Powerball Double Play numbers already in `data/` (from 2026-06-03); playslip patterns won't do; 4-of-5 sequences left in OI-34.
+- Claude t52u: exact calibration by full enumeration (C(69,5), C(70,5)) pinned and printed as a reference line; disclaimer says it affects jackpot sharing only; `--ticket` help warns that output contains real picks (D-030); README "don't chase 0".
+
 ### Added (2026-11-11 — v0.2 Step 1, D-031)
 - `lottotool ticket add|list` and `lottotool grade`: private append-only ticket ledger (`ledger/tickets/tickets.csv`, gitignored) checked against the archive; tiers from the encoded current charts, amounts only from the private payout cache, else `TIER_LOOKUP_NEEDED`; pending draws reported as `PENDING`.
 - `eras.toml`: optional `power_play_price_usd` (pb-2015 = 1); `pb` / `mm` CLI aliases.

@@ -5,6 +5,7 @@
 
 pub mod check;
 pub mod crosscheck;
+pub mod crowd;
 pub mod data;
 pub mod eras;
 pub mod export;

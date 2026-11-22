@@ -12,17 +12,17 @@
     },
     "powerball": {
       "current_era": "pb-2015",
-      "draws_csv_sha256": "eb306e878dab56646bcb2322b8272080776415d80ec521f409709e3d0b4545b9",
+      "draws_csv_sha256": "83185995d5035e9825fc187c73ceafd807c26cb9ba003030fcbe58e8fe044489",
       "first_draw": "2010-02-03",
-      "last_draw": "2026-11-18",
+      "last_draw": "2026-11-21",
       "missing_csv_sha256": "b5073dc116062aa617436568e41d722d88a1cd6ebb2b5cb7ffe17d9f8a118dae",
       "ny_dataset": "d6yy-54nr",
       "ny_dataset_url": "https://data.ny.gov/resource/d6yy-54nr.json",
-      "rows": 2027
+      "rows": 2028
     }
   },
-  "ingest_log_csv_sha256": "c3c6797d01411d436385d1ebac2cf12865677b3fd7686d0b9538929ae6423cbc",
+  "ingest_log_csv_sha256": "53485d5f1198287fcd11adc4be4c7acf2df1d682bc900a1144f0e76c06ac207f",
   "schema_version": 2,
   "tool_version": "0.1.0",
-  "updated_at": "2026-11-21T17:57:38Z"
+  "updated_at": "2026-11-22T18:29:54Z"
 }
